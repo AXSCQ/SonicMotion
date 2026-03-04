@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description"
+    content="SonicMotion.js — Stem-based audio-reactive UI library. Animate your website with individual instrument tracks.">
+  <title>SonicMotion.js v2 — Stem-Based Audio Reactive UI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <!-- Background Orbs -->
+  <div class="bg-orbs">
+    <div class="orb orb--1" id="orb1"></div>
+    <div class="orb orb--2" id="orb2"></div>
+    <div class="orb orb--3" id="orb3"></div>
+  </div>
+
+  <!-- Beat Flash -->
+  <div class="beat-flash" id="beatFlash"></div>
+
+  <div class="container">
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero__badge"><span></span> Stem-Based Audio Reactive UI</div>
+      <h1 class="hero__title" id="heroTitle">
+        Tu web<br><span class="gradient-text">en movimiento</span>
+      </h1>
+      <p class="hero__subtitle">
+        Carga tus stems separados y el audio original. Cada instrumento
+        anima un elemento diferente de tu sitio web.
+      </p>
+    </section>
+
+    <!-- UPLOAD ZONE -->
+    <div class="upload-zone" id="uploadZone">
+      <div class="upload-zone__icon">📁</div>
+      <div class="upload-zone__text">
+        <strong>Selecciona una carpeta</strong> con tus stems<br>
+        <small>Incluye un archivo "master.mp3" + los stems (kick.mp3, vocals.mp3, bass.mp3, etc.)</small>
+      </div>
+      <input type="file" id="folderInput" webkitdirectory multiple accept="audio/*">
+      <input type="file" id="fileInput" multiple accept="audio/*" style="display:none">
+      <div class="upload-zone__alt" id="altUpload">
+        o <strong>clic aquí</strong> para seleccionar archivos individuales
+      </div>
+    </div>
+
+    <!-- PLAYER -->
+    <div class="player" id="player">
+      <div class="player__info">
+        <div class="player__album-art">🎶</div>
+        <div>
+          <div class="player__track-name" id="trackName">—</div>
+          <div class="player__track-artist" id="stemCount">0 stems detectados</div>
+        </div>
+      </div>
+      <div class="player__controls">
+        <button class="player__btn" id="playBtn" title="Play/Pause">▶</button>
+        <div class="player__progress" id="progressBar">
+          <div class="player__progress-fill" id="progressFill"></div>
+        </div>
+        <span class="player__time" id="timeDisplay">0:00</span>
+      </div>
+    </div>
+
+    <!-- STEMS DETECTED -->
+    <div class="stems-list" id="stemsList"></div>
+
+    <!-- EFFECTS DEMO (generated dynamically) -->
+    <section class="effects-demo" id="effectsSection" style="display:none">
+      <div class="section-title">
+        <h2>✨ Stems en acción</h2>
+        <p>Cada tarjeta reacciona al stem asignado</p>
+      </div>
+      <div class="effects-grid" id="effectsGrid"></div>
+    </section>
+
+    <!-- CODE EXAMPLE -->
+    <section class="code-section">
+      <div class="section-title">
+        <h2>⚡ Así de fácil</h2>
+        <p>Carga tus stems y vincula efectos a cada instrumento</p>
+      </div>
+      <div class="code-block">
+        <span class="code-block__lang">JavaScript</span>
+        <span class="comment">// 1. Crea la instancia con master + stems</span>
+        <span class="keyword">const</span> sm = <span class="function">SonicMotion</span>.<span
+          class="method">create</span>({
+        <span class="function">master</span>: <span class="string">'/audio/master.mp3'</span>,
+        <span class="function">stems</span>: {
+        <span class="function">kick</span>: <span class="string">'/audio/kick.mp3'</span>,
+        <span class="function">snare</span>: <span class="string">'/audio/snare.mp3'</span>,
+        <span class="function">vocals</span>: <span class="string">'/audio/vocals.mp3'</span>,
+        <span class="function">guitar</span>: <span class="string">'/audio/guitar.mp3'</span>,
+        }
+        });
+
+        <span class="comment">// 2. Vincula cada div a un stem específico</span>
+        sm.<span class="method">bind</span>(<span class="string">'.hero'</span>, { <span class="function">effect</span>:
+        <span class="string">'pulse'</span>, <span class="function">stem</span>: <span class="string">'kick'</span>,
+        <span class="function">intensity</span>: <span class="number">0.6</span> });
+        sm.<span class="method">bind</span>(<span class="string">'.particles'</span>, { <span
+          class="function">effect</span>: <span class="string">'shake'</span>, <span class="function">stem</span>: <span
+          class="string">'snare'</span>, <span class="function">intensity</span>: <span class="number">0.5</span> });
+        sm.<span class="method">bind</span>(<span class="string">'.title'</span>, { <span
+          class="function">effect</span>: <span class="string">'glow'</span>, <span class="function">stem</span>: <span
+          class="string">'vocals'</span>, <span class="function">intensity</span>: <span class="number">0.7</span> });
+
+        <span class="comment">// 3. ¡Reproduce!</span>
+        sm.<span class="method">play</span>();
+      </div>
+    </section>
+
+    <!-- FOLDER STRUCTURE -->
+    <section class="code-section">
+      <div class="section-title">
+        <h2>📁 Estructura de carpeta</h2>
+        <p>Organiza tus archivos así</p>
+      </div>
+      <div class="code-block">
+        <span class="code-block__lang">Carpeta</span>
+        mi-cancion/
+        ├── <span class="string">master.mp3</span> <span class="comment">← Audio completo (se reproduce)</span>
+        ├── <span class="function">kick.mp3</span> <span class="comment">← Bombo (análisis silencioso)</span>
+        ├── <span class="function">snare.mp3</span> <span class="comment">← Tambor</span>
+        ├── <span class="function">bass.mp3</span> <span class="comment">← Bajo</span>
+        ├── <span class="function">guitar.mp3</span> <span class="comment">← Guitarra</span>
+        ├── <span class="function">vocals.mp3</span> <span class="comment">← Voz</span>
+        └── <span class="function">...</span> <span class="comment">← Cualquier otro stem</span>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p><strong>SonicMotion.js</strong> v2.0.0 — Stem-Based Audio Reactive UI 🎵</p>
+    </footer>
+  </div>
+
+  <script type="module">
+    import SonicMotion from '../src/sonicmotion.js';
+
+    // ---- State ----
+    let sm = null;
+    let isPlaying = false;
+
+    // ---- DOM ----
+    const uploadZone = document.getElementById('uploadZone');
+    const folderInput = document.getElementById('folderInput');
+    const fileInput = document.getElementById('fileInput');
+    const altUpload = document.getElementById('altUpload');
+    const player = document.getElementById('player');
+    const playBtn = document.getElementById('playBtn');
+    const trackName = document.getElementById('trackName');
+    const stemCount = document.getElementById('stemCount');
+    const progressBar = document.getElementById('progressBar');
+    const progressFill = document.getElementById('progressFill');
+    const timeDisplay = document.getElementById('timeDisplay');
+    const stemsList = document.getElementById('stemsList');
+    const effectsSection = document.getElementById('effectsSection');
+    const effectsGrid = document.getElementById('effectsGrid');
+    const beatFlash = document.getElementById('beatFlash');
+
+    // Effect icons per stem name (best guess)
+    const stemIcons = {
+      kick: '🥁', snare: '🪘', drums: '🥁', percussion: '🪇',
+      bass: '🎸', guitar: '🎸', piano: '🎹', keys: '🎹', synth: '🎹',
+      vocals: '🎤', voice: '🎤', singing: '🎤',
+      strings: '🎻', violin: '🎻', cello: '🎻',
+      brass: '🎺', trumpet: '🎺', sax: '🎷', saxophone: '🎷',
+      other: '🎵', fx: '✨', pad: '🌊', lead: '⚡'
+    };
+
+    // Cycle through effects for each stem
+    const effectCycle = ['pulse', 'scale', 'glow', 'shake', 'rotate', 'wave', 'float', 'color'];
+    const effectDescriptions = {
+      pulse: 'Pulso rítmico', scale: 'Escala reactiva', glow: 'Brillo reactivo',
+      shake: 'Vibración', rotate: 'Rotación suave', wave: 'Onda vertical',
+      float: 'Flotación orgánica', color: 'Cambio de color'
+    };
+
+    // ---- Upload: Folder ----
+    uploadZone.addEventListener('click', (e) => {
+      if (e.target === altUpload || altUpload.contains(e.target)) return;
+      folderInput.click();
+    });
+
+    altUpload.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fileInput.click();
+    });
+
+    folderInput.addEventListener('change', (e) => { loadFiles(e.target.files); });
+    fileInput.addEventListener('change', (e) => { loadFiles(e.target.files); });
+
+    // Drag & drop
+    uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('active'); });
+    uploadZone.addEventListener('dragleave', () => { uploadZone.classList.remove('active'); });
+    uploadZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadZone.classList.remove('active');
+      loadFiles(e.dataTransfer.files);
+    });
+
+    // ---- Load Files ----
+    function loadFiles(files) {
+      if (!files || files.length === 0) return;
+
+      // Destroy previous
+      if (sm) sm.destroy();
+
+      sm = SonicMotion.create();
+      const result = sm.loadFolder(files);
+
+      // Show player
+      player.classList.add('visible');
+      uploadZone.style.display = 'none';
+
+      trackName.textContent = result.master || 'Audio cargado';
+      stemCount.textContent = `${result.stems.length} stem${result.stems.length !== 1 ? 's' : ''} detectado${result.stems.length !== 1 ? 's' : ''}`;
+
+      // Show detected stems
+      stemsList.innerHTML = '';
+      if (result.stems.length > 0) {
+        const title = document.createElement('div');
+        title.className = 'stems-list__title';
+        title.textContent = '🎼 Stems detectados:';
+        stemsList.appendChild(title);
+
+        const tags = document.createElement('div');
+        tags.className = 'stems-list__tags';
+        result.stems.forEach(name => {
+          const tag = document.createElement('span');
+          tag.className = 'stem-tag';
+          const icon = stemIcons[name] || stemIcons.other;
+          tag.textContent = `${icon} ${name}`;
+          tags.appendChild(tag);
+        });
+        stemsList.appendChild(tags);
+      }
+
+      // Generate effect cards dynamically
+      effectsGrid.innerHTML = '';
+      effectsSection.style.display = 'block';
+
+      result.stems.forEach((stemName, i) => {
+        const effect = effectCycle[i % effectCycle.length];
+        const icon = stemIcons[stemName] || stemIcons.other;
+
+        // Create card
+        const card = document.createElement('div');
+        card.className = 'effect-card';
+        card.id = `stem-card-${stemName}`;
+        card.innerHTML = `
+          <span class="effect-card__icon">${icon}</span>
+          <div class="effect-card__name">${stemName}</div>
+          <div class="effect-card__desc">${effectDescriptions[effect] || effect}</div>
+          <div class="effect-card__meter">
+            <div class="effect-card__meter-fill" id="meter-${stemName}"></div>
+          </div>
+        `;
+        effectsGrid.appendChild(card);
+
+        // Bind effect to this stem
+        sm.bind(`#stem-card-${stemName}`, {
+          effect: effect,
+          stem: stemName,
+          intensity: 0.6
+        });
+      });
+
+      // Bind background orbs to first few stems
+      const names = result.stems;
+      if (names[0]) sm.bind('#orb1', { effect: 'scale', stem: names[0], intensity: 0.8 });
+      if (names[1]) sm.bind('#orb2', { effect: 'float', stem: names[1], intensity: 0.6 });
+      if (names[2]) sm.bind('#orb3', { effect: 'pulse', stem: names[2], intensity: 0.5 });
+      if (names[0]) sm.bind('#heroTitle', { effect: 'glow', stem: names[0], intensity: 0.5, color: '99, 102, 241' });
+
+      // Beat flash on first stem (usually kick/drums)
+      if (names[0]) {
+        sm.onBeat(names[0], ({ intensity }) => {
+          beatFlash.classList.add('active');
+          setTimeout(() => beatFlash.classList.remove('active'), 80);
+        });
+      }
+
+      // Per-frame: update meters and progress
+      sm.onFrame((data) => {
+        // Update meters
+        for (const name of names) {
+          const meter = document.getElementById(`meter-${name}`);
+          if (meter && data[name]) {
+            meter.style.width = (data[name].value * 100) + '%';
+          }
+        }
+
+        // Progress bar
+        if (data._duration > 0) {
+          progressFill.style.width = ((data._time / data._duration) * 100) + '%';
+          const mins = Math.floor(data._time / 60);
+          const secs = Math.floor(data._time % 60).toString().padStart(2, '0');
+          timeDisplay.textContent = `${mins}:${secs}`;
+        }
+      });
+
+      // Auto play
+      sm.play();
+      isPlaying = true;
+      playBtn.textContent = '⏸';
+    }
+
+    // ---- Play/Pause ----
+    playBtn.addEventListener('click', () => {
+      if (!sm) return;
+      if (isPlaying) {
+        sm.pause();
+        playBtn.textContent = '▶';
+      } else {
+        sm.play();
+        playBtn.textContent = '⏸';
+      }
+      isPlaying = !isPlaying;
+    });
+
+    // ---- Seek ----
+    progressBar.addEventListener('click', (e) => {
+      if (!sm) return;
+      const rect = progressBar.getBoundingClientRect();
+      const pct = (e.clientX - rect.left) / rect.width;
+      sm.seek(pct * sm.duration);
+    });
+  </script>
+
+</body>
+
+</html>
