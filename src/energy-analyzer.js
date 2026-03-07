@@ -1,138 +1,64 @@
 /**
- * EnergyAnalyzer — Analyzes the overall energy/level of an audio signal.
- * Used per-stem to get a single 0-1 value representing how loud/active that stem is.
+ * EnergyAnalyzer — Calculates the raw intensity/volume of a stem track.
+ * Converts frequency data into a robust, smoothed 0.0 to 1.0 multiplier.
  */
 export class EnergyAnalyzer {
     constructor() {
-        // Smoothed output value
-        this._value = 0;
-        // Beat detection state
-        this._historySize = 43; // ~1 second at 60fps
-        this._energyHistory = new Float32Array(this._historySize);
-        this._historyIndex = 0;
-        this._historyFilled = false;
-        this._isBeat = false;
-        this._beatIntensity = 0;
-        this._lastBeatTime = 0;
-        this._beatCallbacks = [];
-        // BPM
-        this._beatTimes = [];
-        this._bpm = 0;
+        this._value = 0; // Smoothed final output (0 to 1)
+        this._peakAmp = 0; // Local peak tracking for automatic gain control
+        this._agcDecay = 0.998; // Very slow decay for the peak tracker
     }
 
     /**
-     * Register a beat callback for this stem
-     * @param {Function} cb - ({ intensity, bpm }) => void
-     * @returns {Function} unsubscribe
-     */
-    onBeat(cb) {
-        this._beatCallbacks.push(cb);
-        return () => {
-            const i = this._beatCallbacks.indexOf(cb);
-            if (i !== -1) this._beatCallbacks.splice(i, 1);
-        };
-    }
-
-    /**
-     * Analyze frequency data from an AnalyserNode and return energy value
-     * @param {Uint8Array} frequencyData
-     * @returns {{ value: number, isBeat: boolean, beatIntensity: number, bpm: number }}
+     * Transforms raw frequency bins into a single normalized intensity value.
+     * @param {Uint8Array} frequencyData 
+     * @returns {number} 0.0 to 1.0
      */
     analyze(frequencyData) {
         if (!frequencyData || frequencyData.length === 0) {
-            return { value: 0, isBeat: false, beatIntensity: 0, bpm: 0 };
+            return this._value = 0;
         }
 
-        // Calculate RMS energy across all frequencies
-        let sum = 0;
-        let peak = 0;
+        let sumSquare = 0;
         for (let i = 0; i < frequencyData.length; i++) {
-            const v = frequencyData[i] / 255;
-            sum += v * v;
-            if (v > peak) peak = v;
+            const val = frequencyData[i] / 255;
+            sumSquare += val * val;
         }
-        const rms = Math.sqrt(sum / frequencyData.length);
 
-        // Mix RMS + peak for responsiveness
-        const raw = rms * 0.6 + peak * 0.4;
+        // Root Mean Square for true perceptual volume
+        let rms = Math.sqrt(sumSquare / frequencyData.length);
 
-        // Power curve for more contrast
-        const curved = Math.pow(raw, 1.6);
-
-        // Attack/release smoothing
-        if (curved > this._value) {
-            this._value += (curved - this._value) * 0.55; // fast attack
+        // Simple Automatic Gain Control (AGC) - If this track is quiet naturally, boost it 
+        // to still utilize the 0-1 range. If it's loud, scale it correctly.
+        if (rms > this._peakAmp) {
+            this._peakAmp = rms;
         } else {
-            this._value += (curved - this._value) * 0.12; // slow release
+            this._peakAmp *= this._agcDecay;
         }
 
-        // ---- Beat detection ----
-        const energy = this._value;
-        this._isBeat = false;
-        this._beatIntensity = 0;
+        const normalized = this._peakAmp > 0.01 ? Math.min(1.0, rms / this._peakAmp) : rms;
 
-        // Add to history
-        this._energyHistory[this._historyIndex] = energy;
-        this._historyIndex = (this._historyIndex + 1) % this._historySize;
-        if (this._historyIndex === 0) this._historyFilled = true;
+        // Apply a power curve so loud parts pop visually while quiet parts remain low
+        const curved = Math.pow(normalized, 1.8);
 
-        const histLen = this._historyFilled ? this._historySize : this._historyIndex;
-        let avg = 0;
-        for (let i = 0; i < histLen; i++) avg += this._energyHistory[i];
-        avg /= histLen || 1;
-
-        const now = performance.now();
-        const timeSinceLast = now - this._lastBeatTime;
-
-        if (energy > avg * 1.4 && energy > 0.12 && timeSinceLast > 150) {
-            this._isBeat = true;
-            this._beatIntensity = Math.min(1, (energy - avg) / (avg || 0.01));
-            this._lastBeatTime = now;
-
-            // BPM tracking
-            this._beatTimes.push(now);
-            if (this._beatTimes.length > 20) this._beatTimes.shift();
-            this._estimateBPM();
-
-            // Fire callbacks
-            const data = { intensity: this._beatIntensity, bpm: this._bpm };
-            for (const cb of this._beatCallbacks) {
-                try { cb(data); } catch (e) { /* ignore */ }
-            }
+        // Attack/Release enveloping for visual smoothness
+        if (curved > this._value) {
+            // Fast attack: Visually snap instantly when sound hits
+            this._value += (curved - this._value) * 0.7;
+        } else {
+            // Slower release: Visually fade out slightly when sound drops
+            this._value += (curved - this._value) * 0.15;
         }
 
-        return {
-            value: this._value,
-            isBeat: this._isBeat,
-            beatIntensity: this._beatIntensity,
-            bpm: this._bpm
-        };
+        return this._value;
     }
 
-    _estimateBPM() {
-        if (this._beatTimes.length < 4) return;
-        const intervals = [];
-        for (let i = 1; i < this._beatTimes.length; i++) {
-            intervals.push(this._beatTimes[i] - this._beatTimes[i - 1]);
-        }
-        const filtered = intervals.filter(i => i > 200 && i < 2000);
-        if (filtered.length < 2) return;
-        const avg = filtered.reduce((a, b) => a + b, 0) / filtered.length;
-        this._bpm = Math.round(60000 / avg);
+    get value() {
+        return this._value;
     }
-
-    get value() { return this._value; }
-    get isBeat() { return this._isBeat; }
 
     reset() {
         this._value = 0;
-        this._energyHistory.fill(0);
-        this._historyIndex = 0;
-        this._historyFilled = false;
-        this._isBeat = false;
-        this._beatIntensity = 0;
-        this._lastBeatTime = 0;
-        this._beatTimes = [];
-        this._bpm = 0;
+        this._peakAmp = 0;
     }
 }

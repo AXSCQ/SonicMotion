@@ -5,8 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description"
-    content="SonicMotion.js — Stem-based audio-reactive UI library. Animate your website with individual instrument tracks.">
-  <title>SonicMotion.js v2 — Stem-Based Audio Reactive UI</title>
+    content="SonicMotion.js v3 — Audio-reactive UI library using synchronized track stems and data attributes.">
+  <title>SonicMotion.js v3 — Audio Reactive UI</title>
   <link rel="stylesheet" href="style.css">
 </head>
 
@@ -25,14 +25,14 @@
   <div class="container">
 
     <!-- HERO -->
-    <section class="hero">
-      <div class="hero__badge"><span></span> Stem-Based Audio Reactive UI</div>
-      <h1 class="hero__title" id="heroTitle">
+    <section class="hero" data-sonic="pulse" data-sonic-track="kick" data-sonic-threshold="0.7">
+      <div class="hero__badge"><span></span> Data-Attribute Audio Reactive UI</div>
+      <h1 class="hero__title" id="heroTitle" data-sonic="glow" data-sonic-track="vocals" data-sonic-threshold="0.1">
         Tu web<br><span class="gradient-text">en movimiento</span>
       </h1>
-      <p class="hero__subtitle">
-        Carga tus stems separados y el audio original. Cada instrumento
-        anima un elemento diferente de tu sitio web.
+      <p class="hero__subtitle" data-sonic="float" data-sonic-track="other" data-sonic-threshold="0.3">
+        Sincroniza un máster de audio con pistas invisibles. Configura animaciones
+        directamente en tu HTML usando atributos `data-sonic`.
       </p>
     </section>
 
@@ -87,31 +87,24 @@
         <p>Carga tus stems y vincula efectos a cada instrumento</p>
       </div>
       <div class="code-block">
-        <span class="code-block__lang">JavaScript</span>
-        <span class="comment">// 1. Crea la instancia con master + stems</span>
-        <span class="keyword">const</span> sm = <span class="function">SonicMotion</span>.<span
-          class="method">create</span>({
-        <span class="function">master</span>: <span class="string">'/audio/master.mp3'</span>,
-        <span class="function">stems</span>: {
-        <span class="function">kick</span>: <span class="string">'/audio/kick.mp3'</span>,
-        <span class="function">snare</span>: <span class="string">'/audio/snare.mp3'</span>,
-        <span class="function">vocals</span>: <span class="string">'/audio/vocals.mp3'</span>,
-        <span class="function">guitar</span>: <span class="string">'/audio/guitar.mp3'</span>,
-        }
+        <span class="code-block__lang">HTML + JavaScript</span>
+        <span class="comment">&lt;!-- 1. Añade atributos data-sonic a tus elementos --&gt;</span>
+        &lt;div <span class="function">data-sonic</span>=<span class="string">"scale"</span> <span class="function">data-sonic-track</span>=<span class="string">"kick"</span> <span class="function">data-sonic-threshold</span>=<span class="string">"0.8"</span>&gt;
+           Explota con el bombo
+        &lt;/div&gt;
+
+        &lt;h1 <span class="function">data-sonic</span>=<span class="string">"glow"</span> <span class="function">data-sonic-track</span>=<span class="string">"vocals"</span>&gt;
+           Brilla con las voces
+        &lt;/h1&gt;
+
+        <span class="comment">// 2. Inicializa SonicMotion</span>
+        <span class="keyword">const</span> sm = <span class="function">SonicMotion</span>.<span class="method">create</span>({
+            <span class="function">master</span>: <span class="string">'/audio/master.mp3'</span>,
+            <span class="function">stems</span>: { <span class="function">kick</span>: <span class="string">'/audio/kick.mp3'</span>, <span class="function">vocals</span>: <span class="string">'/audio/vocals.mp3'</span> }
         });
 
-        <span class="comment">// 2. Vincula cada div a un stem específico</span>
-        sm.<span class="method">bind</span>(<span class="string">'.hero'</span>, { <span class="function">effect</span>:
-        <span class="string">'pulse'</span>, <span class="function">stem</span>: <span class="string">'kick'</span>,
-        <span class="function">intensity</span>: <span class="number">0.6</span> });
-        sm.<span class="method">bind</span>(<span class="string">'.particles'</span>, { <span
-          class="function">effect</span>: <span class="string">'shake'</span>, <span class="function">stem</span>: <span
-          class="string">'snare'</span>, <span class="function">intensity</span>: <span class="number">0.5</span> });
-        sm.<span class="method">bind</span>(<span class="string">'.title'</span>, { <span
-          class="function">effect</span>: <span class="string">'glow'</span>, <span class="function">stem</span>: <span
-          class="string">'vocals'</span>, <span class="function">intensity</span>: <span class="number">0.7</span> });
-
-        <span class="comment">// 3. ¡Reproduce!</span>
+        <span class="comment">// 3. Analiza el DOM y reproduce</span>
+        sm.<span class="method">initDOM</span>();
         sm.<span class="method">play</span>();
       </div>
     </section>
@@ -136,7 +129,7 @@
     </section>
 
     <footer class="footer">
-      <p><strong>SonicMotion.js</strong> v2.0.0 — Stem-Based Audio Reactive UI 🎵</p>
+      <p><strong>SonicMotion.js</strong> v3.0.0 — Data-Attribute Audio Sync 🎵</p>
     </footer>
   </div>
 
@@ -242,7 +235,7 @@
         stemsList.appendChild(tags);
       }
 
-      // Generate effect cards dynamically
+      // Create effect cards dynamically with the new data attributes
       effectsGrid.innerHTML = '';
       effectsSection.style.display = 'block';
 
@@ -250,10 +243,13 @@
         const effect = effectCycle[i % effectCycle.length];
         const icon = stemIcons[stemName] || stemIcons.other;
 
-        // Create card
         const card = document.createElement('div');
         card.className = 'effect-card';
-        card.id = `stem-card-${stemName}`;
+        // Magic happens here via attributes
+        card.setAttribute('data-sonic', effect);
+        card.setAttribute('data-sonic-track', stemName);
+        card.setAttribute('data-sonic-threshold', '0.1');
+
         card.innerHTML = `
           <span class="effect-card__icon">${icon}</span>
           <div class="effect-card__name">${stemName}</div>
@@ -263,28 +259,22 @@
           </div>
         `;
         effectsGrid.appendChild(card);
-
-        // Bind effect to this stem
-        sm.bind(`#stem-card-${stemName}`, {
-          effect: effect,
-          stem: stemName,
-          intensity: 0.6
-        });
       });
 
-      // Bind background orbs to first few stems
+      // Bind background orbs
       const names = result.stems;
-      if (names[0]) sm.bind('#orb1', { effect: 'scale', stem: names[0], intensity: 0.8 });
-      if (names[1]) sm.bind('#orb2', { effect: 'float', stem: names[1], intensity: 0.6 });
-      if (names[2]) sm.bind('#orb3', { effect: 'pulse', stem: names[2], intensity: 0.5 });
-      if (names[0]) sm.bind('#heroTitle', { effect: 'glow', stem: names[0], intensity: 0.5, color: '99, 102, 241' });
-
-      // Beat flash on first stem (usually kick/drums)
       if (names[0]) {
-        sm.onBeat(names[0], ({ intensity }) => {
-          beatFlash.classList.add('active');
-          setTimeout(() => beatFlash.classList.remove('active'), 80);
-        });
+        document.getElementById('orb1').setAttribute('data-sonic', 'scale');
+        document.getElementById('orb1').setAttribute('data-sonic-track', names[0]);
+        document.getElementById('orb1').setAttribute('data-sonic-threshold', '0.6');
+      }
+
+      // Initialize all DOM elements that have data-sonic attributes!
+      sm.initDOM();
+
+      // Flash logic if needed manually (though could be an effect)
+      if (names[0]) {
+         // Manual hook demo
       }
 
       // Per-frame: update meters and progress
