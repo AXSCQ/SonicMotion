@@ -1,6 +1,6 @@
 {
   "name": "sonicmotion",
-  "version": "1.0.0",
+  "version": "3.0.0",
   "description": "Lightweight audio-reactive UI animation library. Make your website move with music.",
   "main": "dist/sonicmotion.min.js",
   "module": "src/sonicmotion.js",
