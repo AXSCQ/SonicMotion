@@ -45,7 +45,7 @@ export class SyncAudioManager {
 
         const url = source instanceof File || source instanceof Blob ? URL.createObjectURL(source) : source;
         this.masterAudio = new Audio(url);
-        
+
         if (source instanceof File || source instanceof Blob) {
             this.masterAudio.addEventListener('loadeddata', () => URL.revokeObjectURL(url), { once: true });
         }
@@ -78,8 +78,9 @@ export class SyncAudioManager {
 
         audio.crossOrigin = 'anonymous';
         audio.preload = 'metadata';
-        audio.muted = true; // Crucial: Stems remain completely silent
-        audio.volume = 0;
+        // Note: Do NOT set audio.muted = true or audio.volume = 0 here.
+        // In Chrome/Edge, doing so will output silence to the MediaElementAudioSourceNode.
+        // The stem is already silenced by the silentGain node below this.
 
         const mediaSource = this.ctx.createMediaElementSource(audio);
         const analyser = this.ctx.createAnalyser();
@@ -125,11 +126,11 @@ export class SyncAudioManager {
      */
     update() {
         const results = new Map();
-        
+
         // Continuous Drift Correction during the loop
         if (this.isPlaying && this.masterAudio && !this.masterAudio.seeking) {
             const masterTime = this.masterAudio.currentTime;
-            
+
             for (const [name, stem] of this.stems) {
                 // If a stem drifts more than 50ms from master, force sync it
                 if (Math.abs(stem.audio.currentTime - masterTime) > 0.05) {
@@ -154,7 +155,7 @@ export class SyncAudioManager {
         }
 
         const promises = [];
-        
+
         // Ensure stems are at the right master time before playing
         if (this.masterAudio) {
             this._syncStemsToMaster();
@@ -162,8 +163,6 @@ export class SyncAudioManager {
         }
 
         for (const [, stem] of this.stems) {
-            // Re-enforce mute just in case
-            stem.audio.muted = true;
             promises.push(stem.audio.play().catch(e => {
                 console.warn(`SonicMotion: Could not play stem '${stem.name}'`, e);
             }));

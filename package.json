@@ -6,10 +6,19 @@
   "module": "src/sonicmotion.js",
   "type": "module",
   "scripts": {
-    "build": "esbuild src/sonicmotion.js --bundle --minify --format=iife --global-name=SonicMotion --outfile=dist/sonicmotion.min.js",
-    "dev": "esbuild src/sonicmotion.js --bundle --format=iife --global-name=SonicMotion --outfile=dist/sonicmotion.js --servedir=demo --serve=8080"
+    "build": "esbuild src/sonicmotion.js --bundle --minify --format=esm --outfile=dist/sonicmotion.min.js",
+    "dev": "esbuild src/sonicmotion.js --bundle --format=esm --outfile=dist/sonicmotion.js --servedir=demo --serve=8080"
   },
-  "keywords": ["audio", "animation", "music", "reactive", "ui", "web-audio-api", "beats", "frequency"],
+  "keywords": [
+    "audio",
+    "animation",
+    "music",
+    "reactive",
+    "ui",
+    "web-audio-api",
+    "beats",
+    "frequency"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {

@@ -85,8 +85,9 @@ class SonicMotionInstance {
     }
 
     play() {
-        this._audioManager.play();
+        const p = this._audioManager.play();
         this._startLoop();
+        return p || Promise.resolve();
     }
 
     pause() {

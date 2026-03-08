@@ -139,6 +139,13 @@ export class EffectsController {
         // Fetch the latest intensities for all stems
         const stemData = this._stemDataFn ? this._stemDataFn() : new Map();
 
+        // // Debug logging (approx every 60 frames / 1 sec)
+        // if (Math.random() < 0.02) {
+        //     const printData = {};
+        //     for (const [key, val] of stemData.entries()) printData[key] = val.value.toFixed(3);
+        //     console.log("SonicMotion Debug Energy:", printData);
+        // }
+
         for (const binding of this._bindings) {
             const data = stemData.get(binding.stem);
             const rawIntensity = data ? data.value : 0;
