@@ -38,12 +38,15 @@ export class EffectsController {
             const threshold = parseFloat(el.getAttribute('data-sonic-threshold')) || 0;
             // Default intensity is 0.5 for scaling the effect
             const intensity = parseFloat(el.getAttribute('data-sonic-intensity')) || 0.5;
+            // Optional band: 'bass', 'mid', 'treble'. Omit (or null) for global energy.
+            const band = el.getAttribute('data-sonic-band') || null;
 
             this.bind(el, {
                 effect: effectName,
                 stem: stemName,
                 threshold: threshold,
-                intensity: intensity
+                intensity: intensity,
+                band: band,
             });
         });
 
@@ -83,6 +86,7 @@ export class EffectsController {
                 config: {
                     threshold: config.threshold ?? 0,
                     intensity: config.intensity ?? 0.5,
+                    band: config.band ?? null,  // 'bass' | 'mid' | 'treble' | null (global)
                     // Track current value independently for smooth easing
                     currentValue: 0
                 }
@@ -148,7 +152,19 @@ export class EffectsController {
 
         for (const binding of this._bindings) {
             const data = stemData.get(binding.stem);
-            const rawIntensity = data ? data.value : 0;
+
+            // Resolve intensity: use band-specific value if data-sonic-band is set,
+            // otherwise fall back to the global stem energy.
+            let rawIntensity = 0;
+            if (data) {
+                const band = binding.config.band;
+                if (band && data.bands && data.bands[band] !== undefined) {
+                    rawIntensity = data.bands[band];
+                } else {
+                    rawIntensity = data.value;
+                }
+            }
+
             const threshold = binding.config.threshold;
 
             let targetValue = 0;

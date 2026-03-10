@@ -1,10 +1,15 @@
 {
   "name": "sonicmotion",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Lightweight audio-reactive UI animation library. Make your website move with music.",
-  "main": "dist/sonicmotion.min.js",
+  "main": "src/sonicmotion.js",
   "module": "src/sonicmotion.js",
   "type": "module",
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "esbuild src/sonicmotion.js --bundle --minify --format=esm --outfile=dist/sonicmotion.min.js",
     "dev": "esbuild src/sonicmotion.js --bundle --format=esm --outfile=dist/sonicmotion.js --servedir=demo --serve=8080"
@@ -17,9 +22,12 @@
     "ui",
     "web-audio-api",
     "beats",
-    "frequency"
+    "frequency",
+    "stems",
+    "audio-reactive",
+    "sonicmotion"
   ],
-  "author": "",
+  "author": "axscq",
   "license": "MIT",
   "devDependencies": {
     "esbuild": "^0.20.0"

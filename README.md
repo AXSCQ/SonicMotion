@@ -1,13 +1,12 @@
-# 🎵 SonicMotion.js V3
+# 🎵 SonicMotion.js v3.1.0
 
-**Ultra-Lightweight Audio-Reactive UI Library (0 dependencies, ~10KB)** — Convierte tu interfaz web en un visualizador interactivo reaccionando a las frecuencias (stems) de tu música mediante atributos HTML puros.
+**Ultra-Lightweight Audio-Reactive UI Library (0 dependencies, ~10KB)**
 
-## ¿Qué es SonicMotion V3?
-A diferencia de librerías costosas que analizan un solo archivo `.mp3` de forma imprecisa, SonicMotion V3 utiliza **Audio Stems** (pistas separadas como bajo, batería, voces). 
+Convierte tu interfaz web en un visualizador interactivo sincronizado con la música. Usa stems de audio (pistas separadas) y atributos HTML para controlar animaciones en tiempo real.
 
-El servidor reproduce un archivo `master.mp3` de forma audible, mientras los stems (ej. `bass.mp3`, `drums.mp3`) se cargan en paralelo de forma silenciosa. El algoritmo analiza matemáticamente la energía FFT de cada instrumento en tiempo real (60 FPS) y controla tu UI pasándole estos datos.
+---
 
-## Instalación Node.js (Vite, Astro, React, etc.)
+## Instalación
 
 ```bash
 npm install sonicmotion
@@ -17,68 +16,178 @@ npm install sonicmotion
 import SonicMotion from 'sonicmotion';
 ```
 
-## Guía de Uso Rápido (Astro, HTML, React)
+---
 
-### 1. Inicializa la Librería
-Solamente necesitas apuntar a la ruta de tu track master, y luego definir el nombre y ruta de cada stem.
+## Uso rápido
+
+### 1. Inicializa con Master + Stems
 
 ```javascript
 import SonicMotion from 'sonicmotion';
 
 const sonic = SonicMotion.create({
-    master: '/music/master.mp3', // Audio que el usuario escuchará
+    master: '/music/master.mp3',   // Audio que el usuario escucha
     stems: {
-        bass: '/music/bass.mp3', // Audio fantasma para analizar el bajo
-        drums: '/music/drums.mp3', // Audio fantasma de la batería
-        vocals: '/music/vocals.mp3' // Audio fantasma de las voces
+        kick:   '/music/kick.mp3',    // Bombo (analizado en silencio)
+        bass:   '/music/bass.mp3',    // Bajo
+        vocals: '/music/vocals.mp3'   // Voces
     }
 });
 
-sonic.initDOM(); // Pone a la librería a buscar los 'data-sonic' en tu HTML
+sonic.initDOM(); // Escanea el DOM buscando [data-sonic]
 ```
 
-### 2. Escribe los Efectos Customizables
-Tú controlas qué hace cada valor matemáticamente en el DOM. Registra tus comportamientos donde quieras. La `intensity` viaja siempre de `0.0` (silencio) a `1.0` (volumen máximo).
-
-```javascript
-SonicMotion.registerEffect("glow-anim", (element, intensity) => {
-    // Escala del 100% al 120% dependiendo del golpe
-    const scale = 1 + (intensity * 0.2); 
-    element.style.transform = `scale(${scale})`;
-    
-    // Brillo intenso en base al volumen
-    element.style.boxShadow = `0 0 ${intensity * 40}px rgba(0, 255, 255, ${intensity})`;
-});
-```
-
-### 3. Integra en tu HTML!
-Usa HTML simple. No necesitas complicados renderers en React/Vue.
+### 2. Usa atributos HTML para las animaciones
 
 ```html
-<!-- Este div bailará cuando la batería suene, ignorando la voz y el bajo (threshold=0.3 bloquea ruido de fondo) -->
-<div 
-  data-sonic="glow-anim" 
-  data-sonic-track="drums" 
-  data-sonic-threshold="0.3">
-    Sección Batería
+<!-- Escala con el kick, solo cuando supera 80% de energía -->
+<div data-sonic="scale"
+     data-sonic-track="kick"
+     data-sonic-threshold="0.8">
+  Explota con el bombo
+</div>
+
+<!-- Brillo con los bajos del stem "bass" (banda de frecuencia baja) -->
+<h1 data-sonic="glow"
+    data-sonic-track="bass"
+    data-sonic-band="bass"
+    data-sonic-threshold="0.3">
+  Brilla con los graves
+</h1>
+
+<!-- Vibración con los agudos de las voces -->
+<div data-sonic="shake"
+     data-sonic-track="vocals"
+     data-sonic-band="treble">
+  Tiembla con los sibilantes
 </div>
 ```
 
-### 4. Empieza la Fiesta
-Simplemente llama al método asíncrono `play()` después de una interacción del usuario (click/tap) para evitar las restricciones Anti-Autoplay de Web Audio en navegadores modernos.
+### 3. Reproducir (requiere gesto del usuario)
 
 ```javascript
 document.getElementById('play-btn').addEventListener('click', () => {
-    sonic.play().then(() => console.log("Playing!"));
+    sonic.play();
 });
 ```
 
-## Resumen de Atributos HTML Declarativos
+---
 
-Agrega estos atributos a cualquier etiqueta (`<div>`, `<img>`, `<a>`) en tu DOM:
+## Atributos HTML declarativos
 
-- `data-sonic="<nombre_efecto>"`: El nombre del efecto registrado con `SonicMotion.registerEffect`.
-- `data-sonic-track="<nombre_stem>"`: El identificador del stem que definiste en `.create()` (ej: "bass").
-- `data-sonic-threshold="<0.0 - 1.0>"`: Ignora los sonidos con una energía menor a este número. Útil si el stem tiene eco o ruido de fondo para hacerlo reaccionar solo a "golpes fuertes". Ideal entre `0.2` a `0.5`.
+| Atributo | Valores | Descripción |
+|---|---|---|
+| `data-sonic` | `scale`, `pulse`, `glow`, `shake`, `rotate`, `wave`, `float`, `color` | Efecto a aplicar |
+| `data-sonic-track` | nombre del stem | Stem del que lee la energía |
+| `data-sonic-band` | `bass`, `mid`, `treble` | **Nuevo v3.1** — Banda de frecuencia específica |
+| `data-sonic-threshold` | `0.0` – `1.0` | Umbral mínimo para activar el efecto |
+| `data-sonic-intensity` | `0.0` – `2.0` | Multiplica la magnitud del efecto |
 
-Para una lista detallada de los componentes internos y variables matemáticas de SonicMotion, visita [docs/API.md](docs/API.md).
+### Bandas de frecuencia (`data-sonic-band`)
+
+| Banda | Rango aprox. | Captura |
+|---|---|---|
+| `bass` | 0 – 2.2 kHz | Kick, bombo, sub-bass |
+| `mid` | 2.2 – 11 kHz | Snare, guitarra, voz principal |
+| `treble` | 11 – 22 kHz | Hi-hats, platillos, brillos |
+| *(sin atributo)* | global | Energía total del stem |
+
+---
+
+## API JavaScript
+
+### `SonicMotion.create(options)`
+
+```javascript
+const sonic = SonicMotion.create({
+    master: '/audio/master.mp3',
+    stems: {
+        kick: '/audio/kick.mp3',      // string URL
+        bass: fileObject,              // o File / Blob
+    },
+    noiseFloor: 0.08  // Umbral de ruido global (0.0–1.0). Default: 0.08
+});
+```
+
+### `sonic.addStem(name, source, options?)`
+
+```javascript
+// Agregar un stem con noise gate personalizado
+sonic.addStem('hihat', '/audio/hihat.mp3', {
+    noiseFloor: 0.12   // más alto = solo golpes fuertes
+});
+```
+
+### `sonic.bind(selector, config)`
+
+```javascript
+sonic.bind('#my-element', {
+    effect: 'scale',
+    stem: 'kick',
+    band: 'bass',       // 'bass' | 'mid' | 'treble' | null
+    threshold: 0.35,
+    intensity: 1.2,
+});
+```
+
+### `sonic.onFrame(callback)`
+
+```javascript
+sonic.onFrame((data) => {
+    // data.kick.value   → energía global del stem (0–1)
+    // data.kick.bands.bass    → energía en graves (0–1)
+    // data.kick.bands.mid     → energía en medios (0–1)
+    // data.kick.bands.treble  → energía en agudos (0–1)
+    console.log(data.kick.bands.bass);
+});
+```
+
+### Otros métodos
+
+```javascript
+sonic.play()      // Reproduce
+sonic.pause()     // Pausa
+sonic.seek(time)  // Salta al segundo `time`
+sonic.initDOM()   // Re-escanea el DOM
+sonic.destroy()   // Limpia todos los recursos
+```
+
+---
+
+## Efectos incorporados
+
+| Efecto | Descripción |
+|---|---|
+| `scale` | El elemento crece con la energía |
+| `pulse` | Escala + opacidad reactiva |
+| `glow` | Halo (box-shadow) pulsante |
+| `shake` | Vibración rápida |
+| `rotate` | Rotación suave continua |
+| `wave` | Movimiento sinusoidal vertical |
+| `float` | Flotación orgánica |
+| `color` | Cambio de tonalidad (hue) |
+
+### Registrar efecto personalizado
+
+```javascript
+SonicMotion.registerEffect('my-effect', (element, value, config) => {
+    // value: 0.0 – 1.0
+    element.style.transform = `scale(${1 + value * 0.5})`;
+    element.style.filter = `brightness(${1 + value})`;
+});
+```
+
+---
+
+## Cambios v3.1.0
+
+- **Análisis por banda de frecuencia** — bass / mid / treble independientes con noise gate, AGC y curva de potencia propios
+- **`data-sonic-band`** — nuevo atributo HTML para dirigir efectos a una banda específica
+- **`onFrame` mejorado** — incluye `bands: { bass, mid, treble }` por stem
+- **Ruido reducido** — noise gate configurable por stem (`noiseFloor`), AGC desacoplado del silencio, `smoothingTimeConstant` 0.3
+
+---
+
+## Licencia
+
+MIT © 2025 SonicMotion

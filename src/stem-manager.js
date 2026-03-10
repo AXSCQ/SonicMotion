@@ -63,8 +63,12 @@ export class SyncAudioManager {
 
     /**
      * Add a stem track for silent tracking
+     * @param {string} name - Stem identifier
+     * @param {string|File|Blob} source - Audio source
+     * @param {object} [options] - Options
+     * @param {number} [options.noiseFloor=0.08] - RMS noise gate threshold (0.0 to 1.0). Signals below this are treated as silence.
      */
-    addStem(name, source) {
+    addStem(name, source, options = {}) {
         this._init();
 
         if (this.stems.has(name)) this.removeStem(name);
@@ -85,7 +89,9 @@ export class SyncAudioManager {
         const mediaSource = this.ctx.createMediaElementSource(audio);
         const analyser = this.ctx.createAnalyser();
         analyser.fftSize = 512; // Fast response for global volume
-        analyser.smoothingTimeConstant = 0.6; // We do our own smoothing
+        // Lower smoothing = faster response to silence. 0.3 prevents ghost energy
+        // from lingering between frames. We also do our own smoothing in EnergyAnalyzer.
+        analyser.smoothingTimeConstant = 0.3;
 
         mediaSource.connect(analyser); // Connect to analyser
         // Do NOT connect analyser to destination
@@ -97,7 +103,7 @@ export class SyncAudioManager {
         silentGain.connect(this.ctx.destination);
 
         const frequencyData = new Uint8Array(analyser.frequencyBinCount);
-        const energyAnalyzer = new EnergyAnalyzer();
+        const energyAnalyzer = new EnergyAnalyzer({ noiseFloor: options.noiseFloor });
 
         this.stems.set(name, {
             name,
@@ -142,8 +148,10 @@ export class SyncAudioManager {
         for (const [name, stem] of this.stems) {
             stem.analyser.getByteFrequencyData(stem.frequencyData);
             const value = stem.energyAnalyzer.analyze(stem.frequencyData);
+            const bands = stem.energyAnalyzer.bands;
             stem.currentValue = value;
-            results.set(name, { value });
+            stem.currentBands = bands;
+            results.set(name, { value, bands });
         }
 
         return results;

@@ -26,8 +26,14 @@ class SonicMotionInstance {
             this._audioManager.loadMaster(config.master);
         }
         if (config.stems) {
-            for (const [name, source] of Object.entries(config.stems)) {
-                this._audioManager.addStem(name, source);
+            for (const [name, val] of Object.entries(config.stems)) {
+                // Support both shorthand { stems: { kick: 'url' } }
+                // and options form { stems: { kick: { src: 'url', noiseFloor: 0.15 } } }
+                if (typeof val === 'string' || val instanceof File || val instanceof Blob) {
+                    this._audioManager.addStem(name, val);
+                } else if (val && val.src) {
+                    this._audioManager.addStem(name, val.src, val);
+                }
             }
         }
     }
@@ -67,9 +73,15 @@ class SonicMotionInstance {
 
     /**
      * Add a silent tracking stem
+     * @param {string} name - Stem identifier
+     * @param {string|File|Blob} source - Audio source URL, File, or Blob
+     * @param {object} [options] - Options
+     * @param {number} [options.noiseFloor=0.08] - Noise gate threshold (0.0–1.0). Signals
+     *   below this RMS level are treated as silence and produce zero output. Raise this
+     *   value (e.g. 0.15) if a stem is too reactive to quiet background noise.
      */
-    addStem(name, source) {
-        this._audioManager.addStem(name, source);
+    addStem(name, source, options = {}) {
+        this._audioManager.addStem(name, source, options);
         return this;
     }
 
@@ -161,7 +173,10 @@ class SonicMotionInstance {
             for (const name of this._audioManager.getStemNames()) {
                 const stem = this._audioManager.stems.get(name);
                 if (stem) {
-                    data[name] = { value: stem.currentValue };
+                    data[name] = {
+                        value: stem.currentValue,
+                        bands: stem.currentBands ?? { bass: 0, mid: 0, treble: 0 }
+                    };
                 }
             }
             data._time = this._audioManager.currentTime;

@@ -4,326 +4,1022 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description"
-    content="SonicMotion.js v3 — Audio-reactive UI library using synchronized track stems and data attributes.">
-  <title>SonicMotion.js v3 — Audio Reactive UI</title>
-  <link rel="stylesheet" href="style.css">
+  <title>SonicMotion — Single Stem Analyzer</title>
+  <style>
+    /* ── Reset & Base ──────────────────────────────────────────────────────── */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #0a0a0f;
+      color: #e2e8f0;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Background orbs ──────────────────────────────────────────────────── */
+    .bg-orbs {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.18;
+      transition: transform 0.1s ease-out;
+      will-change: transform, opacity;
+    }
+
+    .orb--1 {
+      width: 500px;
+      height: 500px;
+      background: #7c3aed;
+      top: -100px;
+      left: -100px;
+    }
+
+    .orb--2 {
+      width: 400px;
+      height: 400px;
+      background: #2563eb;
+      bottom: -100px;
+      right: -100px;
+    }
+
+    .orb--3 {
+      width: 300px;
+      height: 300px;
+      background: #db2777;
+      top: 40%;
+      left: 50%;
+    }
+
+    .beat-flash {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      background: radial-gradient(ellipse at center, rgba(239, 68, 68, 0.15) 0%, transparent 70%);
+      opacity: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 2;
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem;
+    }
+
+    /* ── Hero ─────────────────────────────────────────────────────────────── */
+    .hero {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .hero__badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      background: rgba(139, 92, 246, 0.12);
+      border: 1px solid rgba(139, 92, 246, 0.25);
+      color: #a78bfa;
+      border-radius: 99px;
+      padding: 4px 12px;
+      margin-bottom: 1.2rem;
+    }
+
+    .hero__badge span {
+      width: 6px;
+      height: 6px;
+      background: #a78bfa;
+      border-radius: 50%;
+      display: inline-block;
+      animation: pulseGreen 2s ease-in-out infinite;
+    }
+
+    .hero__title {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #a78bfa, #ec4899, #f59e0b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero__subtitle {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 0.95rem;
+      margin-top: 0.9rem;
+      line-height: 1.6;
+    }
+
+    /* ── Drop zone ────────────────────────────────────────────────────────── */
+    .drop-zone {
+      border: 2px dashed rgba(139, 92, 246, 0.4);
+      border-radius: 20px;
+      padding: 3rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: rgba(139, 92, 246, 0.04);
+      position: relative;
+    }
+
+    .drop-zone.drag-over {
+      border-color: #8b5cf6;
+      background: rgba(139, 92, 246, 0.12);
+      transform: scale(1.01);
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .drop-zone__icon {
+      font-size: 3.5rem;
+      margin-bottom: 0.8rem;
+    }
+
+    .drop-zone__title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 0.4rem;
+    }
+
+    .drop-zone__hint {
+      font-size: 0.82rem;
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    /* ── Player ───────────────────────────────────────────────────────────── */
+    .player {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      padding: 1.2rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+      margin-top: 1.5rem;
+    }
+
+    .player__info {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .player__icon {
+      font-size: 2rem;
+    }
+
+    .player__name {
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+
+    .player__sub {
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.4);
+      margin-top: 2px;
+    }
+
+    .player__controls {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+    }
+
+    .player__btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      background: linear-gradient(135deg, #7c3aed, #ec4899);
+      color: #fff;
+      transition: transform 0.15s;
+    }
+
+    .player__btn:hover {
+      transform: scale(1.1);
+    }
+
+    .player__progress {
+      flex: 1;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .player__progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #7c3aed, #ec4899);
+      width: 0%;
+    }
+
+    .player__time {
+      font-size: 0.78rem;
+      color: rgba(255, 255, 255, 0.45);
+      font-variant-numeric: tabular-nums;
+      min-width: 36px;
+    }
+
+    /* ── Band meters ──────────────────────────────────────────────────────── */
+    .section-label {
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: rgba(255, 255, 255, 0.3);
+      font-weight: 600;
+      margin-bottom: 0.9rem;
+    }
+
+    .band-panel {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+      gap: 1rem;
+    }
+
+    .band-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 1.2rem 1.1rem;
+      transition: box-shadow 0.08s ease;
+    }
+
+    .band-card__label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-weight: 600;
+      margin-bottom: 0.3rem;
+    }
+
+    .band-card__value {
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .band-card__bar-track {
+      height: 5px;
+      background: rgba(255, 255, 255, 0.07);
+      border-radius: 3px;
+      margin-top: 0.7rem;
+      overflow: hidden;
+    }
+
+    .band-card__bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.05s linear;
+    }
+
+    .band-card--global {
+      --c: 139, 92, 246;
+    }
+
+    .band-card--bass {
+      --c: 239, 68, 68;
+    }
+
+    .band-card--mid {
+      --c: 234, 179, 8;
+    }
+
+    .band-card--treble {
+      --c: 34, 197, 94;
+    }
+
+    .band-card__label {
+      color: rgba(var(--c), 0.9);
+    }
+
+    .band-card__bar-fill {
+      background: rgba(var(--c), 1);
+    }
+
+    .band-card.pulse-glow {
+      box-shadow: 0 0 28px rgba(var(--c), 0.4);
+    }
+
+    /* ── Reactor cards ────────────────────────────────────────────────────── */
+    .reactor-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 1.2rem;
+    }
+
+    .reactor-card {
+      border-radius: 16px;
+      padding: 1.8rem 1.3rem;
+      text-align: center;
+      font-weight: 700;
+      border: 2px solid transparent;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+      will-change: transform, box-shadow;
+    }
+
+    .reactor-card__emoji {
+      font-size: 2.2rem;
+    }
+
+    .reactor-card__name {
+      font-size: 0.9rem;
+    }
+
+    .reactor-card__tag {
+      font-size: 0.62rem;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      opacity: 0.5;
+    }
+
+    .reactor-card--global {
+      background: rgba(139, 92, 246, 0.07);
+      border-color: rgba(139, 92, 246, 0.2);
+      color: #a78bfa;
+    }
+
+    .reactor-card--bass {
+      background: rgba(239, 68, 68, 0.07);
+      border-color: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+    }
+
+    .reactor-card--mid {
+      background: rgba(234, 179, 8, 0.07);
+      border-color: rgba(234, 179, 8, 0.2);
+      color: #fbbf24;
+    }
+
+    .reactor-card--treble {
+      background: rgba(34, 197, 94, 0.07);
+      border-color: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+    }
+
+    .debug-bar {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 0.8rem 1.1rem;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 0.76rem;
+      color: rgba(255, 255, 255, 0.45);
+      line-height: 1.8;
+      margin-top: 1.5rem;
+    }
+
+    .debug-bar span {
+      color: #a78bfa;
+      font-weight: 700;
+    }
+
+    #mainSection {
+      display: none;
+      margin-top: 1.5rem;
+    }
+
+    .section-block {
+      margin-top: 2rem;
+    }
+
+    /* ── Animations ───────────────────────────────────────────────────────── */
+    @keyframes pulseGreen {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.3;
+      }
+    }
+  </style>
 </head>
 
 <body>
 
-  <!-- Background Orbs -->
   <div class="bg-orbs">
     <div class="orb orb--1" id="orb1"></div>
     <div class="orb orb--2" id="orb2"></div>
     <div class="orb orb--3" id="orb3"></div>
   </div>
-
-  <!-- Beat Flash -->
   <div class="beat-flash" id="beatFlash"></div>
 
   <div class="container">
 
-    <!-- HERO -->
-    <section class="hero" data-sonic="pulse" data-sonic-track="kick" data-sonic-threshold="0.7">
-      <div class="hero__badge"><span></span> Data-Attribute Audio Reactive UI</div>
-      <h1 class="hero__title" id="heroTitle" data-sonic="glow" data-sonic-track="vocals" data-sonic-threshold="0.1">
-        Tu web<br><span class="gradient-text">en movimiento</span>
-      </h1>
-      <p class="hero__subtitle" data-sonic="float" data-sonic-track="other" data-sonic-threshold="0.3">
-        Sincroniza un máster de audio con pistas invisibles. Configura animaciones
-        directamente en tu HTML usando atributos `data-sonic`.
-      </p>
+    <section class="hero">
+      <div class="hero__badge"><span></span> Single Stem Analyzer</div>
+      <h1 class="hero__title">Pon tu <span class="gradient-text">bombo</span> aquí</h1>
+      <p class="hero__subtitle">Sube cualquier audio — bombo, tambor, bajo — y verás cómo SonicMotion<br>detecta la
+        energía por banda de frecuencia en tiempo real.</p>
     </section>
 
-    <!-- UPLOAD ZONE -->
-    <div class="upload-zone" id="uploadZone">
-      <div class="upload-zone__icon">📁</div>
-      <div class="upload-zone__text">
-        <strong>Selecciona una carpeta</strong> con tus stems<br>
-        <small>Incluye un archivo "master.mp3" + los stems (kick.mp3, vocals.mp3, bass.mp3, etc.)</small>
-      </div>
-      <input type="file" id="folderInput" webkitdirectory multiple accept="audio/*">
-      <input type="file" id="fileInput" multiple accept="audio/*" style="display:none">
-      <div class="upload-zone__alt" id="altUpload">
-        o <strong>clic aquí</strong> para seleccionar archivos individuales
-      </div>
+    <!-- DROP ZONE -->
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept="audio/*">
+      <div class="drop-zone__icon">🥁</div>
+      <div class="drop-zone__title">Arrastra tu audio aquí</div>
+      <div class="drop-zone__hint">MP3, WAV, OGG — cualquier formato. El mismo archivo se reproduce Y se analiza.</div>
     </div>
 
-    <!-- PLAYER -->
-    <div class="player" id="player">
-      <div class="player__info">
-        <div class="player__album-art">🎶</div>
-        <div>
-          <div class="player__track-name" id="trackName">—</div>
-          <div class="player__track-artist" id="stemCount">0 stems detectados</div>
+    <!-- MAIN SECTION -->
+    <div id="mainSection">
+
+      <!-- PLAYER -->
+      <div class="player">
+        <div class="player__info">
+          <div class="player__icon" id="playerIcon">🎵</div>
+          <div>
+            <div class="player__name" id="trackName">—</div>
+            <div class="player__sub">Stem único · análisis en vivo</div>
+          </div>
+        </div>
+        <div class="player__controls">
+          <button class="player__btn" id="playBtn">▶</button>
+          <div class="player__progress" id="progressBar">
+            <div class="player__progress-fill" id="progressFill"></div>
+          </div>
+          <span class="player__time" id="timeDisplay">0:00</span>
         </div>
       </div>
-      <div class="player__controls">
-        <button class="player__btn" id="playBtn" title="Play/Pause">▶</button>
-        <div class="player__progress" id="progressBar">
-          <div class="player__progress-fill" id="progressFill"></div>
+
+      <!-- BAND METERS -->
+      <div class="section-block">
+        <div class="section-label">⚡ Energía por frecuencia — tiempo real</div>
+        <div class="band-panel">
+          <div class="band-card band-card--global">
+            <div class="band-card__label">Global</div>
+            <div class="band-card__value" id="val-global">0%</div>
+            <div class="band-card__bar-track">
+              <div class="band-card__bar-fill" id="bar-global"></div>
+            </div>
+          </div>
+          <div class="band-card band-card--bass">
+            <div class="band-card__label">Bass · 0–2 kHz</div>
+            <div class="band-card__value" id="val-bass">0%</div>
+            <div class="band-card__bar-track">
+              <div class="band-card__bar-fill" id="bar-bass"></div>
+            </div>
+          </div>
+          <div class="band-card band-card--mid">
+            <div class="band-card__label">Mid · 2–11 kHz</div>
+            <div class="band-card__value" id="val-mid">0%</div>
+            <div class="band-card__bar-track">
+              <div class="band-card__bar-fill" id="bar-mid"></div>
+            </div>
+          </div>
+          <div class="band-card band-card--treble">
+            <div class="band-card__label">Treble · 11–22 kHz</div>
+            <div class="band-card__value" id="val-treble">0%</div>
+            <div class="band-card__bar-track">
+              <div class="band-card__bar-fill" id="bar-treble"></div>
+            </div>
+          </div>
         </div>
-        <span class="player__time" id="timeDisplay">0:00</span>
       </div>
-    </div>
 
-    <!-- STEMS DETECTED -->
-    <div class="stems-list" id="stemsList"></div>
-
-    <!-- EFFECTS DEMO (generated dynamically) -->
-    <section class="effects-demo" id="effectsSection" style="display:none">
-      <div class="section-title">
-        <h2>✨ Stems en acción</h2>
-        <p>Cada tarjeta reacciona al stem asignado</p>
+      <!-- REACTIVE CARDS -->
+      <div class="section-block">
+        <div class="section-label">🎨 Elementos reactivos — data-sonic-band</div>
+        <div class="reactor-grid">
+          <div class="reactor-card reactor-card--global" id="card-global">
+            <div class="reactor-card__emoji">🔮</div>
+            <div class="reactor-card__name">Energía global</div>
+            <div class="reactor-card__tag">band: (none)</div>
+          </div>
+          <div class="reactor-card reactor-card--bass" id="card-bass">
+            <div class="reactor-card__emoji">💥</div>
+            <div class="reactor-card__name">Bombo / Sub</div>
+            <div class="reactor-card__tag">band: bass</div>
+          </div>
+          <div class="reactor-card reactor-card--mid" id="card-mid">
+            <div class="reactor-card__emoji">🎸</div>
+            <div class="reactor-card__name">Medios / Cuerpo</div>
+            <div class="reactor-card__tag">band: mid</div>
+          </div>
+          <div class="reactor-card reactor-card--treble" id="card-treble">
+            <div class="reactor-card__emoji">✨</div>
+            <div class="reactor-card__name">Agudos / Brillo</div>
+            <div class="reactor-card__tag">band: treble</div>
+          </div>
+        </div>
       </div>
-      <div class="effects-grid" id="effectsGrid"></div>
-    </section>
 
-    <!-- CODE EXAMPLE -->
-    <section class="code-section">
-      <div class="section-title">
-        <h2>⚡ Así de fácil</h2>
-        <p>Carga tus stems y vincula efectos a cada instrumento</p>
-      </div>
-      <div class="code-block">
-        <span class="code-block__lang">HTML + JavaScript</span>
-        <span class="comment">&lt;!-- 1. Añade atributos data-sonic a tus elementos --&gt;</span>
-        &lt;div <span class="function">data-sonic</span>=<span class="string">"scale"</span> <span class="function">data-sonic-track</span>=<span class="string">"kick"</span> <span class="function">data-sonic-threshold</span>=<span class="string">"0.8"</span>&gt;
-           Explota con el bombo
-        &lt;/div&gt;
+      <!-- DEBUG -->
+      <div class="debug-bar" id="debugBar">Esperando audio...</div>
 
-        &lt;h1 <span class="function">data-sonic</span>=<span class="string">"glow"</span> <span class="function">data-sonic-track</span>=<span class="string">"vocals"</span>&gt;
-           Brilla con las voces
-        &lt;/h1&gt;
+    </div><!-- /mainSection -->
 
-        <span class="comment">// 2. Inicializa SonicMotion</span>
-        <span class="keyword">const</span> sm = <span class="function">SonicMotion</span>.<span class="method">create</span>({
-            <span class="function">master</span>: <span class="string">'/audio/master.mp3'</span>,
-            <span class="function">stems</span>: { <span class="function">kick</span>: <span class="string">'/audio/kick.mp3'</span>, <span class="function">vocals</span>: <span class="string">'/audio/vocals.mp3'</span> }
-        });
-
-        <span class="comment">// 3. Analiza el DOM y reproduce</span>
-        sm.<span class="method">initDOM</span>();
-        sm.<span class="method">play</span>();
-      </div>
-    </section>
-
-    <!-- FOLDER STRUCTURE -->
-    <section class="code-section">
-      <div class="section-title">
-        <h2>📁 Estructura de carpeta</h2>
-        <p>Organiza tus archivos así</p>
-      </div>
-      <div class="code-block">
-        <span class="code-block__lang">Carpeta</span>
-        mi-cancion/
-        ├── <span class="string">master.mp3</span> <span class="comment">← Audio completo (se reproduce)</span>
-        ├── <span class="function">kick.mp3</span> <span class="comment">← Bombo (análisis silencioso)</span>
-        ├── <span class="function">snare.mp3</span> <span class="comment">← Tambor</span>
-        ├── <span class="function">bass.mp3</span> <span class="comment">← Bajo</span>
-        ├── <span class="function">guitar.mp3</span> <span class="comment">← Guitarra</span>
-        ├── <span class="function">vocals.mp3</span> <span class="comment">← Voz</span>
-        └── <span class="function">...</span> <span class="comment">← Cualquier otro stem</span>
-      </div>
-    </section>
-
-    <footer class="footer">
-      <p><strong>SonicMotion.js</strong> v3.0.0 — Data-Attribute Audio Sync 🎵</p>
+    <footer style="margin-top:3rem;text-align:center;color:rgba(255,255,255,0.2);font-size:0.78rem;">
+      SonicMotion.js v3.0.0 — Single Stem Analyzer 🥁
     </footer>
   </div>
 
-  <script type="module">
-    import SonicMotion from '../src/sonicmotion.js';
+  <script>
+    /* ════════════════════════════════════════════════════════════════════════
+       SonicMotion — Fully inlined (no ES module imports needed)
+       Works with file:// AND http:// protocols
+    ════════════════════════════════════════════════════════════════════════ */
 
-    // ---- State ----
-    let sm = null;
+    // ── 1. EFFECTS ─────────────────────────────────────────────────────────────
+    const _transformMap = new WeakMap();
+    function mergeTransform(el, type, str) {
+      if (!_transformMap.has(el)) _transformMap.set(el, {});
+      const t = _transformMap.get(el);
+      t[type] = str;
+      return Object.values(t).join(' ');
+    }
+
+    const EFFECTS = {
+      scale(el, v, cfg) {
+        const i = cfg.intensity ?? 0.5;
+        const s = 1 + v * i * 0.6;
+        el.style.transform = mergeTransform(el, 'scale', `scale(${s})`);
+      },
+      pulse(el, v, cfg) {
+        const i = cfg.intensity ?? 0.5;
+        const s = 1 + v * i * 0.4;
+        el.style.transform = mergeTransform(el, 'scale', `scale(${s})`);
+        el.style.opacity = 0.6 + v * 0.4;
+      },
+      glow(el, v, cfg) {
+        const i = cfg.intensity ?? 0.5;
+        const color = cfg.color || '139, 92, 246';
+        const r = v * i * 40;
+        const sp = v * i * 15;
+        el.style.boxShadow = `0 0 ${r}px ${sp}px rgba(${color},${v * 0.8})`;
+      },
+      shake(el, v, cfg) {
+        const i = cfg.intensity ?? 0.5;
+        const mp = i * 8;
+        const x = (Math.random() - 0.5) * 2 * v * mp;
+        const y = (Math.random() - 0.5) * 2 * v * mp;
+        el.style.transform = mergeTransform(el, 'translate', `translate(${x}px,${y}px)`);
+      },
+      rotate(el, v, cfg) {
+        const deg = v * (cfg.intensity ?? 0.5) * 30;
+        el.style.transform = mergeTransform(el, 'rotate', `rotate(${deg}deg)`);
+      },
+      wave(el, v, cfg) {
+        const i = cfg.intensity ?? 0.5;
+        const y = Math.sin(performance.now() * 0.003) * v * i * 20;
+        el.style.transform = mergeTransform(el, 'translateY', `translateY(${y}px)`);
+      },
+      float(el, v, cfg) {
+        const i = cfg.intensity ?? 0.5;
+        const t = performance.now() * 0.002;
+        const y = Math.sin(t) * i * 15 * (0.3 + v * 0.7);
+        const r = Math.sin(t * 0.7) * 3 * v;
+        el.style.transform = mergeTransform(el, 'translateY', `translateY(${y}px) rotate(${r}deg)`);
+      },
+      color(el, v, cfg) {
+        el.style.filter = `hue-rotate(${v * (cfg.intensity ?? 0.5) * 360}deg)`;
+      }
+    };
+
+    // ── 2. ENERGY ANALYZER ────────────────────────────────────────────────────
+    class EnergyAnalyzer {
+      constructor(options = {}) {
+        this._noiseFloor = options.noiseFloor ?? 0.08;
+        this._agcDecay = 0.998;
+        this._value = 0;
+        this._peakAmp = 0;
+        this._bands = {
+          bass: { _value: 0, _peak: 0 },
+          mid: { _value: 0, _peak: 0 },
+          treble: { _value: 0, _peak: 0 },
+        };
+      }
+
+      analyze(fd) {
+        if (!fd || fd.length === 0) { this._value = 0; this._resetBands(); return 0; }
+        const len = fd.length;
+        const bassEnd = Math.floor(len * 0.10);
+        const midEnd = Math.floor(len * 0.50);
+
+        const rmsGlobal = this._rms(fd, 0, len);
+        const rmsBass = this._rms(fd, 0, bassEnd);
+        const rmsMid = this._rms(fd, bassEnd, midEnd);
+        const rmsTreble = this._rms(fd, midEnd, len);
+
+        if (rmsGlobal < this._noiseFloor) {
+          this._value *= 0.85;
+          if (this._value < 0.001) this._value = 0;
+          this._decayBands();
+          return this._value;
+        }
+
+        this._value = this._proc(rmsGlobal, this._peakAmp, this._value, 2.5, (p) => this._peakAmp = p);
+
+        const bf = this._noiseFloor * 0.6;
+        this._bands.bass._value = this._procBand(rmsBass, this._bands.bass, bf, 2.2);
+        this._bands.mid._value = this._procBand(rmsMid, this._bands.mid, bf, 2.5);
+        this._bands.treble._value = this._procBand(rmsTreble, this._bands.treble, bf, 2.8);
+        return this._value;
+      }
+
+      _rms(d, s, e) {
+        let sum = 0; const n = e - s;
+        for (let i = s; i < e; i++) { const v = d[i] / 255; sum += v * v; }
+        return n > 0 ? Math.sqrt(sum / n) : 0;
+      }
+
+      _proc(rms, peak, cur, curve, setPeak) {
+        if (rms > peak) { setPeak(rms); peak = rms; }
+        else { setPeak(peak * this._agcDecay); peak *= this._agcDecay; }
+        const norm = peak > this._noiseFloor ? Math.min(1, rms / peak) : 0;
+        const c = Math.pow(norm, curve);
+        return c > cur ? cur + (c - cur) * 0.7 : cur + (c - cur) * 0.15;
+      }
+
+      _procBand(rms, b, floor, curve) {
+        if (rms < floor) { b._value = (b._value * 0.85); if (b._value < 0.001) b._value = 0; return b._value; }
+        if (rms > b._peak) b._peak = rms; else b._peak *= this._agcDecay;
+        const norm = b._peak > floor ? Math.min(1, rms / b._peak) : 0;
+        const c = Math.pow(norm, curve);
+        b._value = c > b._value ? b._value + (c - b._value) * 0.7 : b._value + (c - b._value) * 0.15;
+        return b._value;
+      }
+
+      _decayBands() { for (const b of Object.values(this._bands)) { b._value = (b._value ?? 0) * 0.85; if (b._value < 0.001) b._value = 0; } }
+      _resetBands() { for (const b of Object.values(this._bands)) { b._value = 0; b._peak = 0; } }
+
+      get value() { return this._value; }
+      get bands() { return { bass: this._bands.bass._value, mid: this._bands.mid._value, treble: this._bands.treble._value }; }
+      reset() { this._value = 0; this._peakAmp = 0; this._resetBands(); }
+    }
+
+    // ── 3. AUDIO MANAGER ─────────────────────────────────────────────────────
+    class AudioManager {
+      constructor() {
+        this.ctx = null;
+        this.masterAudio = null;
+        this.masterSource = null;
+        this.stems = new Map();
+        this.isPlaying = false;
+      }
+
+      _init() {
+        if (this.ctx) return;
+        const AC = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AC();
+      }
+
+      loadMaster(file) {
+        this._init();
+        if (this.masterAudio) this.masterAudio.pause();
+        const url = URL.createObjectURL(file);
+        this.masterAudio = new Audio();
+        this.masterAudio.crossOrigin = 'anonymous';
+        this.masterAudio.src = url;
+        this.masterAudio.addEventListener('loadeddata', () => URL.revokeObjectURL(url), { once: true });
+        this.masterSource = this.ctx.createMediaElementSource(this.masterAudio);
+        this.masterSource.connect(this.ctx.destination);
+      }
+
+      addStem(name, file, options = {}) {
+        this._init();
+        if (this.stems.has(name)) this.removeStem(name);
+
+        const url = URL.createObjectURL(file);
+        const audio = new Audio();
+        audio.crossOrigin = 'anonymous';
+        audio.src = url;
+        audio.addEventListener('loadeddata', () => URL.revokeObjectURL(url), { once: true });
+
+        const src = this.ctx.createMediaElementSource(audio);
+        const analyser = this.ctx.createAnalyser();
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.3;
+        src.connect(analyser);
+
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0;
+        analyser.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        const fd = new Uint8Array(analyser.frequencyBinCount);
+        const ea = new EnergyAnalyzer({ noiseFloor: options.noiseFloor });
+
+        this.stems.set(name, { name, audio, src, analyser, gain, fd, ea, currentValue: 0, currentBands: { bass: 0, mid: 0, treble: 0 } });
+      }
+
+      removeStem(name) {
+        const s = this.stems.get(name);
+        if (!s) return;
+        s.audio.pause();
+        try { s.src.disconnect(); } catch (e) { }
+        try { s.analyser.disconnect(); } catch (e) { }
+        try { s.gain.disconnect(); } catch (e) { }
+        this.stems.delete(name);
+      }
+
+      update() {
+        const results = new Map();
+        if (this.isPlaying && this.masterAudio) {
+          const mt = this.masterAudio.currentTime;
+          for (const [, stem] of this.stems) {
+            if (Math.abs(stem.audio.currentTime - mt) > 0.05) stem.audio.currentTime = mt;
+          }
+        }
+        for (const [name, stem] of this.stems) {
+          stem.analyser.getByteFrequencyData(stem.fd);
+          const value = stem.ea.analyze(stem.fd);
+          const bands = stem.ea.bands;
+          stem.currentValue = value;
+          stem.currentBands = bands;
+          results.set(name, { value, bands });
+        }
+        return results;
+      }
+
+      async play() {
+        if (this.ctx && this.ctx.state === 'suspended') await this.ctx.resume();
+        const mt = this.masterAudio ? this.masterAudio.currentTime : 0;
+        for (const [, s] of this.stems) { try { s.audio.currentTime = mt; } catch (e) { } }
+        const ps = [];
+        if (this.masterAudio) ps.push(this.masterAudio.play());
+        for (const [, s] of this.stems) ps.push(s.audio.play().catch(() => { }));
+        await Promise.allSettled(ps);
+        this.isPlaying = true;
+      }
+
+      pause() {
+        if (this.masterAudio) this.masterAudio.pause();
+        for (const [, s] of this.stems) s.audio.pause();
+        this.isPlaying = false;
+      }
+
+      seek(time) { if (this.masterAudio) this.masterAudio.currentTime = time; }
+      get duration() { return this.masterAudio ? this.masterAudio.duration || 0 : 0; }
+      get currentTime() { return this.masterAudio ? this.masterAudio.currentTime || 0 : 0; }
+
+      destroy() {
+        this.pause();
+        if (this.masterSource) try { this.masterSource.disconnect(); } catch (e) { }
+        for (const [name] of this.stems) this.removeStem(name);
+        if (this.ctx) this.ctx.close();
+        this.ctx = null; this.masterAudio = null;
+      }
+    }
+
+    // ── 4. EFFECTS CONTROLLER ─────────────────────────────────────────────────
+    class EffectsController {
+      constructor() {
+        this._bindings = [];
+        this._rafId = null;
+        this._running = false;
+        this._stemDataFn = null;
+      }
+
+      setDataSource(fn) { this._stemDataFn = fn; }
+
+      bind(el, cfg) {
+        el.style.willChange = 'transform, opacity, filter, box-shadow';
+        const binding = {
+          element: el,
+          effectFn: EFFECTS[cfg.effect],
+          stem: cfg.stem || 'stem',
+          config: {
+            threshold: cfg.threshold ?? 0,
+            intensity: cfg.intensity ?? 0.5,
+            band: cfg.band ?? null,
+            currentValue: 0
+          }
+        };
+        if (!binding.effectFn) { console.warn(`Unknown effect: ${cfg.effect}`); return; }
+        this._bindings.push(binding);
+      }
+
+      start() {
+        if (this._running) return;
+        this._running = true;
+        this._loop();
+      }
+
+      stop() {
+        this._running = false;
+        if (this._rafId) { cancelAnimationFrame(this._rafId); this._rafId = null; }
+      }
+
+      _loop() {
+        if (!this._running) return;
+        const stemData = this._stemDataFn ? this._stemDataFn() : new Map();
+
+        for (const b of this._bindings) {
+          const data = stemData.get(b.stem);
+          let raw = 0;
+          if (data) {
+            const band = b.config.band;
+            raw = (band && data.bands && data.bands[band] !== undefined) ? data.bands[band] : data.value;
+          }
+          const thr = b.config.threshold;
+          let target = 0;
+          if (raw > thr) {
+            const range = 1.0 - thr;
+            if (range > 0) target = (raw - thr) / range;
+          }
+          b.config.currentValue = target > b.config.currentValue
+            ? b.config.currentValue + (target - b.config.currentValue) * 0.8
+            : b.config.currentValue + (target - b.config.currentValue) * 0.2;
+          b.effectFn(b.element, b.config.currentValue, b.config);
+        }
+
+        this._rafId = requestAnimationFrame(() => this._loop());
+      }
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+       DEMO LOGIC
+    ════════════════════════════════════════════════════════════════════════ */
+    let am = null;   // AudioManager
+    let ec = null;   // EffectsController
     let isPlaying = false;
+    let debugFrame = 0;
 
-    // ---- DOM ----
-    const uploadZone = document.getElementById('uploadZone');
-    const folderInput = document.getElementById('folderInput');
+    const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
-    const altUpload = document.getElementById('altUpload');
-    const player = document.getElementById('player');
+    const mainSection = document.getElementById('mainSection');
     const playBtn = document.getElementById('playBtn');
-    const trackName = document.getElementById('trackName');
-    const stemCount = document.getElementById('stemCount');
     const progressBar = document.getElementById('progressBar');
     const progressFill = document.getElementById('progressFill');
     const timeDisplay = document.getElementById('timeDisplay');
-    const stemsList = document.getElementById('stemsList');
-    const effectsSection = document.getElementById('effectsSection');
-    const effectsGrid = document.getElementById('effectsGrid');
+    const trackName = document.getElementById('trackName');
+    const playerIcon = document.getElementById('playerIcon');
+    const debugBar = document.getElementById('debugBar');
     const beatFlash = document.getElementById('beatFlash');
+    const orb1 = document.getElementById('orb1');
 
-    // Effect icons per stem name (best guess)
-    const stemIcons = {
-      kick: '🥁', snare: '🪘', drums: '🥁', percussion: '🪇',
-      bass: '🎸', guitar: '🎸', piano: '🎹', keys: '🎹', synth: '🎹',
-      vocals: '🎤', voice: '🎤', singing: '🎤',
-      strings: '🎻', violin: '🎻', cello: '🎻',
-      brass: '🎺', trumpet: '🎺', sax: '🎷', saxophone: '🎷',
-      other: '🎵', fx: '✨', pad: '🌊', lead: '⚡'
+    const bands = {
+      global: { val: document.getElementById('val-global'), bar: document.getElementById('bar-global'), card: document.querySelector('.band-card--global') },
+      bass: { val: document.getElementById('val-bass'), bar: document.getElementById('bar-bass'), card: document.querySelector('.band-card--bass') },
+      mid: { val: document.getElementById('val-mid'), bar: document.getElementById('bar-mid'), card: document.querySelector('.band-card--mid') },
+      treble: { val: document.getElementById('val-treble'), bar: document.getElementById('bar-treble'), card: document.querySelector('.band-card--treble') },
     };
 
-    // Cycle through effects for each stem
-    const effectCycle = ['pulse', 'scale', 'glow', 'shake', 'rotate', 'wave', 'float', 'color'];
-    const effectDescriptions = {
-      pulse: 'Pulso rítmico', scale: 'Escala reactiva', glow: 'Brillo reactivo',
-      shake: 'Vibración', rotate: 'Rotación suave', wave: 'Onda vertical',
-      float: 'Flotación orgánica', color: 'Cambio de color'
-    };
-
-    // ---- Upload: Folder ----
-    uploadZone.addEventListener('click', (e) => {
-      if (e.target === altUpload || altUpload.contains(e.target)) return;
-      folderInput.click();
+    // ── Drop handling ──────────────────────────────────────────────────────────
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault(); dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
     });
+    fileInput.addEventListener('change', e => { if (e.target.files.length) loadFile(e.target.files[0]); });
 
-    altUpload.addEventListener('click', (e) => {
-      e.stopPropagation();
-      fileInput.click();
-    });
+    // ── Load file ──────────────────────────────────────────────────────────────
+    function loadFile(file) {
+      if (!file || !file.type.startsWith('audio/')) { alert('Selecciona un archivo de audio.'); return; }
 
-    folderInput.addEventListener('change', (e) => { loadFiles(e.target.files); });
-    fileInput.addEventListener('change', (e) => { loadFiles(e.target.files); });
+      // Cleanup previous
+      if (ec) ec.stop();
+      if (am) am.destroy();
 
-    // Drag & drop
-    uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('active'); });
-    uploadZone.addEventListener('dragleave', () => { uploadZone.classList.remove('active'); });
-    uploadZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      uploadZone.classList.remove('active');
-      loadFiles(e.dataTransfer.files);
-    });
+      am = new AudioManager();
+      ec = new EffectsController();
 
-    // ---- Load Files ----
-    function loadFiles(files) {
-      if (!files || files.length === 0) return;
+      // Detect icon from filename
+      const fname = file.name.toLowerCase();
+      playerIcon.textContent = fname.includes('kick') || fname.includes('bombo') ? '🥁'
+        : fname.includes('snare') || fname.includes('tambor') ? '🪘'
+          : fname.includes('bass') || fname.includes('bajo') ? '🎸'
+            : fname.includes('vocal') || fname.includes('voz') ? '🎤'
+              : fname.includes('hat') || fname.includes('cymbal') ? '⚡' : '🎵';
+      trackName.textContent = file.name;
 
-      // Destroy previous
-      if (sm) sm.destroy();
+      // Load same file as master (plays audibly) + stem (analyzed silently)
+      am.loadMaster(file);
+      am.addStem('stem', file, { noiseFloor: 0.06 });
 
-      sm = SonicMotion.create();
-      const result = sm.loadFolder(files);
+      // Effects controller data source
+      ec.setDataSource(() => am.update());
 
-      // Show player
-      player.classList.add('visible');
-      uploadZone.style.display = 'none';
+      // Bind reactor cards
+      ec.bind(document.getElementById('card-global'), { effect: 'pulse', stem: 'stem', band: null, threshold: 0.1, intensity: 0.7 });
+      ec.bind(document.getElementById('card-bass'), { effect: 'scale', stem: 'stem', band: 'bass', threshold: 0.2, intensity: 1.0 });
+      ec.bind(document.getElementById('card-mid'), { effect: 'glow', stem: 'stem', band: 'mid', threshold: 0.15, intensity: 0.9, color: '234, 179, 8' });
+      ec.bind(document.getElementById('card-treble'), { effect: 'shake', stem: 'stem', band: 'treble', threshold: 0.15, intensity: 0.7 });
+      ec.bind(orb1, { effect: 'scale', stem: 'stem', band: 'bass', threshold: 0.25, intensity: 1.5 });
 
-      trackName.textContent = result.master || 'Audio cargado';
-      stemCount.textContent = `${result.stems.length} stem${result.stems.length !== 1 ? 's' : ''} detectado${result.stems.length !== 1 ? 's' : ''}`;
+      ec.start();
 
-      // Show detected stems
-      stemsList.innerHTML = '';
-      if (result.stems.length > 0) {
-        const title = document.createElement('div');
-        title.className = 'stems-list__title';
-        title.textContent = '🎼 Stems detectados:';
-        stemsList.appendChild(title);
+      // Per-frame meter + progress update
+      let rafId;
+      function frame() {
+        const data = am.stems.get('stem');
+        if (data) {
+          const v = data.currentValue || 0;
+          const b = data.currentBands || {};
+          updateBand('global', v);
+          updateBand('bass', b.bass || 0);
+          updateBand('mid', b.mid || 0);
+          updateBand('treble', b.treble || 0);
 
-        const tags = document.createElement('div');
-        tags.className = 'stems-list__tags';
-        result.stems.forEach(name => {
-          const tag = document.createElement('span');
-          tag.className = 'stem-tag';
-          const icon = stemIcons[name] || stemIcons.other;
-          tag.textContent = `${icon} ${name}`;
-          tags.appendChild(tag);
-        });
-        stemsList.appendChild(tags);
-      }
+          // Beat flash on heavy bass
+          if ((b.bass || 0) > 0.6) {
+            beatFlash.style.opacity = ((b.bass - 0.6) * 2).toFixed(3);
+            setTimeout(() => { beatFlash.style.opacity = 0; }, 80);
+          }
 
-      // Create effect cards dynamically with the new data attributes
-      effectsGrid.innerHTML = '';
-      effectsSection.style.display = 'block';
-
-      result.stems.forEach((stemName, i) => {
-        const effect = effectCycle[i % effectCycle.length];
-        const icon = stemIcons[stemName] || stemIcons.other;
-
-        const card = document.createElement('div');
-        card.className = 'effect-card';
-        // Magic happens here via attributes
-        card.setAttribute('data-sonic', effect);
-        card.setAttribute('data-sonic-track', stemName);
-        card.setAttribute('data-sonic-threshold', '0.1');
-
-        card.innerHTML = `
-          <span class="effect-card__icon">${icon}</span>
-          <div class="effect-card__name">${stemName}</div>
-          <div class="effect-card__desc">${effectDescriptions[effect] || effect}</div>
-          <div class="effect-card__meter">
-            <div class="effect-card__meter-fill" id="meter-${stemName}"></div>
-          </div>
-        `;
-        effectsGrid.appendChild(card);
-      });
-
-      // Bind background orbs
-      const names = result.stems;
-      if (names[0]) {
-        document.getElementById('orb1').setAttribute('data-sonic', 'scale');
-        document.getElementById('orb1').setAttribute('data-sonic-track', names[0]);
-        document.getElementById('orb1').setAttribute('data-sonic-threshold', '0.6');
-      }
-
-      // Initialize all DOM elements that have data-sonic attributes!
-      sm.initDOM();
-
-      // Flash logic if needed manually (though could be an effect)
-      if (names[0]) {
-         // Manual hook demo
-      }
-
-      // Per-frame: update meters and progress
-      sm.onFrame((data) => {
-        // Update meters
-        for (const name of names) {
-          const meter = document.getElementById(`meter-${name}`);
-          if (meter && data[name]) {
-            meter.style.width = (data[name].value * 100) + '%';
+          // Debug log every ~30 frames
+          debugFrame++;
+          if (debugFrame % 30 === 0) {
+            debugBar.innerHTML =
+              `global: <span>${pct(v)}</span> &nbsp;|&nbsp; ` +
+              `🔴 bass: <span>${pct(b.bass || 0)}</span> &nbsp;|&nbsp; ` +
+              `🟡 mid: <span>${pct(b.mid || 0)}</span> &nbsp;|&nbsp; ` +
+              `🟢 treble: <span>${pct(b.treble || 0)}</span>`;
           }
         }
 
         // Progress bar
-        if (data._duration > 0) {
-          progressFill.style.width = ((data._time / data._duration) * 100) + '%';
-          const mins = Math.floor(data._time / 60);
-          const secs = Math.floor(data._time % 60).toString().padStart(2, '0');
-          timeDisplay.textContent = `${mins}:${secs}`;
+        const dur = am.duration;
+        if (dur > 0) {
+          const t = am.currentTime;
+          progressFill.style.width = ((t / dur) * 100) + '%';
+          const m = Math.floor(t / 60);
+          const s = Math.floor(t % 60).toString().padStart(2, '0');
+          timeDisplay.textContent = `${m}:${s}`;
         }
-      });
 
-      // Auto play
-      sm.play();
-      isPlaying = true;
-      playBtn.textContent = '⏸';
+        rafId = requestAnimationFrame(frame);
+      }
+      frame();
+
+      // Show UI
+      dropZone.style.display = 'none';
+      mainSection.style.display = 'block';
+
+      // Autoplay
+      am.play().then(() => { isPlaying = true; playBtn.textContent = '⏸'; });
     }
 
-    // ---- Play/Pause ----
+    function updateBand(name, raw) {
+      const pctV = Math.round(raw * 100);
+      const ref = bands[name];
+      if (!ref) return;
+      ref.val.textContent = pctV + '%';
+      ref.bar.style.width = pctV + '%';
+      if (raw > 0.15) ref.card.classList.add('pulse-glow');
+      else ref.card.classList.remove('pulse-glow');
+    }
+
+    function pct(v) { return Math.round(v * 100) + '%'; }
+
+    // ── Playback controls ──────────────────────────────────────────────────────
     playBtn.addEventListener('click', () => {
-      if (!sm) return;
-      if (isPlaying) {
-        sm.pause();
-        playBtn.textContent = '▶';
-      } else {
-        sm.play();
-        playBtn.textContent = '⏸';
-      }
+      if (!am) return;
+      if (isPlaying) { am.pause(); playBtn.textContent = '▶'; }
+      else { am.play(); playBtn.textContent = '⏸'; }
       isPlaying = !isPlaying;
     });
 
-    // ---- Seek ----
-    progressBar.addEventListener('click', (e) => {
-      if (!sm) return;
+    progressBar.addEventListener('click', e => {
+      if (!am) return;
       const rect = progressBar.getBoundingClientRect();
-      const pct = (e.clientX - rect.left) / rect.width;
-      sm.seek(pct * sm.duration);
+      am.seek(((e.clientX - rect.left) / rect.width) * am.duration);
     });
   </script>
-
 </body>
 
 </html>
