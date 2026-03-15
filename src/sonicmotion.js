@@ -116,6 +116,26 @@ class SonicMotionInstance {
         this._audioManager.seek(time);
     }
 
+    seekPercent(pct) {
+        this._audioManager.seekPercent(pct);
+    }
+
+    setVolume(vol) {
+        this._audioManager.setVolume(vol);
+    }
+
+    getVolume() {
+        return this._audioManager.getVolume();
+    }
+
+    /**
+     * Subscribe to events: 'play', 'pause', 'stop', 'seek', 'timeupdate', 'ended'
+     * @returns {Function} unsubscribe function
+     */
+    on(event, callback) {
+        return this._audioManager.on(event, callback);
+    }
+
     destroy() {
         this._stopLoop();
         this._effects.unbindAll();
@@ -124,11 +144,20 @@ class SonicMotionInstance {
     }
 
     getValue(stemName) {
-        return this._audioManager.getValue(stemName);
+        const stem = this._audioManager.stems.get(stemName);
+        if (!stem) return null;
+        return {
+            value: stem.currentValue,
+            bands: stem.currentBands ?? { bass: 0, mid: 0, treble: 0 }
+        };
     }
 
     get stemNames() {
         return this._audioManager.getStemNames();
+    }
+
+    get isPlaying() {
+        return this._audioManager.isPlaying;
     }
 
     get currentTime() {
@@ -149,6 +178,16 @@ class SonicMotionInstance {
 
     registerEffect(name, fn) {
         registerEffect(name, fn);
+    }
+
+    /**
+     * Format seconds to MM:SS string
+     */
+    static formatTime(seconds) {
+        if (!seconds || isNaN(seconds)) return '0:00';
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
     }
 
     // ---- Internal Animation Loop ----
@@ -202,7 +241,8 @@ const SonicMotion = {
     get effects() {
         return Object.keys(EFFECTS);
     },
-    version: '3.0.0'
+    version: '4.0.0',
+    formatTime: SonicMotionInstance.formatTime
 };
 
 export default SonicMotion;

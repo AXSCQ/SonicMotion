@@ -17,6 +17,23 @@ export class SyncAudioManager {
         this.stems = new Map();
 
         this.isPlaying = false;
+        this._volume = 1.0;
+
+        /** @type {Map<string, Set<Function>>} */
+        this._listeners = new Map();
+    }
+
+    // ---- Event Emitter ----
+
+    on(event, callback) {
+        if (!this._listeners.has(event)) this._listeners.set(event, new Set());
+        this._listeners.get(event).add(callback);
+        return () => this._listeners.get(event)?.delete(callback);
+    }
+
+    _emit(event, data) {
+        const cbs = this._listeners.get(event);
+        if (cbs) for (const cb of cbs) { try { cb(data); } catch (e) { /* */ } }
     }
 
     /**
@@ -51,14 +68,20 @@ export class SyncAudioManager {
         }
 
         this.masterAudio.crossOrigin = 'anonymous';
+        this.masterAudio.volume = this._volume;
         this.masterSource = this.ctx.createMediaElementSource(this.masterAudio);
         this.masterSource.connect(this.ctx.destination); // Audible!
 
         // Hook up sync events
         this._onMasterTimeUpdate = this._onMasterTimeUpdate.bind(this);
         this._onMasterSeeking = this._onMasterSeeking.bind(this);
+        this._onMasterEnded = () => {
+            this.isPlaying = false;
+            this._emit('ended');
+        };
         this.masterAudio.addEventListener('timeupdate', this._onMasterTimeUpdate);
         this.masterAudio.addEventListener('seeking', this._onMasterSeeking);
+        this.masterAudio.addEventListener('ended', this._onMasterEnded);
     }
 
     /**
@@ -179,6 +202,7 @@ export class SyncAudioManager {
         try {
             await Promise.allSettled(promises);
             this.isPlaying = true;
+            this._emit('play');
         } catch (e) {
             console.error("SonicMotion: Playback error", e);
         }
@@ -190,12 +214,22 @@ export class SyncAudioManager {
             stem.audio.pause();
         }
         this.isPlaying = false;
+        this._emit('pause');
     }
 
     seek(time) {
         if (this.masterAudio) {
             this.masterAudio.currentTime = time;
-            // The seeking event listener will handle the stems
+            this._emit('seek', time);
+        }
+    }
+
+    /**
+     * Seek by percentage (0.0 to 1.0)
+     */
+    seekPercent(pct) {
+        if (this.masterAudio && this.masterAudio.duration) {
+            this.seek(pct * this.masterAudio.duration);
         }
     }
 
@@ -205,12 +239,28 @@ export class SyncAudioManager {
         for (const [, stem] of this.stems) {
             stem.energyAnalyzer.reset();
         }
+        this._emit('stop');
+    }
+
+    /**
+     * Set master volume (0.0 to 1.0)
+     */
+    setVolume(vol) {
+        this._volume = Math.max(0, Math.min(1, vol));
+        if (this.masterAudio) this.masterAudio.volume = this._volume;
+    }
+
+    getVolume() {
+        return this._volume;
     }
 
     // --- Synchronization Handlers ---
 
     _onMasterTimeUpdate() {
-        // Just keep the clock steady
+        this._emit('timeupdate', {
+            currentTime: this.masterAudio?.currentTime || 0,
+            duration: this.masterAudio?.duration || 0
+        });
     }
 
     _onMasterSeeking() {
@@ -237,10 +287,12 @@ export class SyncAudioManager {
         if (this.masterAudio) {
             this.masterAudio.removeEventListener('timeupdate', this._onMasterTimeUpdate);
             this.masterAudio.removeEventListener('seeking', this._onMasterSeeking);
+            this.masterAudio.removeEventListener('ended', this._onMasterEnded);
         }
         if (this.masterSource) try { this.masterSource.disconnect(); } catch (e) { /* */ }
         for (const [name] of this.stems) this.removeStem(name);
         if (this.ctx) this.ctx.close();
+        this._listeners.clear();
         this.ctx = null;
         this.masterAudio = null;
     }

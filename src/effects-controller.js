@@ -153,17 +153,36 @@ export class EffectsController {
         for (const binding of this._bindings) {
             const data = stemData.get(binding.stem);
 
-            // Resolve intensity: use band-specific value if data-sonic-band is set,
-            // otherwise fall back to the global stem energy.
+            // Resolve intensity: support band notation 'bass', 'mid', 'treble'
+            // and sub-field notation 'bass.punch', 'mid.punch', 'treble.punch'.
+            // Falls back to global stem energy if no band is specified.
             let rawIntensity = 0;
             if (data) {
                 const band = binding.config.band;
-                if (band && data.bands && data.bands[band] !== undefined) {
-                    rawIntensity = data.bands[band];
+                if (band && data.bands) {
+                    // Support dot-notation: "bass.punch" → data.bands.bass.punch
+                    const dotIdx = band.indexOf('.');
+                    if (dotIdx !== -1) {
+                        const bandName = band.slice(0, dotIdx);   // 'bass'
+                        const subField = band.slice(dotIdx + 1);  // 'punch'
+                        const bandObj = data.bands[bandName];
+                        rawIntensity = (bandObj && bandObj[subField] !== undefined)
+                            ? bandObj[subField]
+                            : 0;
+                    } else {
+                        // Simple band name: 'bass' → data.bands.bass.value (or legacy number)
+                        const bandObj = data.bands[band];
+                        if (bandObj !== undefined) {
+                            rawIntensity = (typeof bandObj === 'object')
+                                ? (bandObj.value ?? 0)
+                                : bandObj; // backward compat if still a plain number
+                        }
+                    }
                 } else {
                     rawIntensity = data.value;
                 }
             }
+
 
             const threshold = binding.config.threshold;
 

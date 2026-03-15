@@ -9,6 +9,8 @@
  *   • Noise gate — signals below `noiseFloor` output 0.0 exactly
  *   • Independent peak tracker — AGC only chases real audio, not silence
  *   • Smoothed attack/release envelope
+ *   • Punch (onset detection) — spikes only on sudden energy increases (transients)
+ *     e.g. bass.punch peaks sharply on a kick hit, then fast-decays to zero.
  *
  * The global `value` is a weighted blend of all three bands prioritising bass + mid.
  */
@@ -20,18 +22,21 @@ export class EnergyAnalyzer {
      */
     constructor(options = {}) {
         this._noiseFloor = options.noiseFloor ?? 0.08;
-        this._agcDecay   = 0.998;
+        this._agcDecay = 0.998;
 
         // Global energy state
-        this._value    = 0;
-        this._peakAmp  = 0;
+        this._value = 0;
+        this._peakAmp = 0;
 
-        // Per-band state — each band tracks its own peak and smoothed value
+        // Per-band state — each band tracks its own peak, smoothed value and punch
         this._bands = {
-            bass:   { _value: 0, _peak: 0 },
-            mid:    { _value: 0, _peak: 0 },
-            treble: { _value: 0, _peak: 0 },
+            bass: { _value: 0, _peak: 0, _punch: 0 },
+            mid: { _value: 0, _peak: 0, _punch: 0 },
+            treble: { _value: 0, _peak: 0, _punch: 0 },
         };
+
+        // Raw RMS from previous frame — used to compute onset delta
+        this._prevRaw = { bass: 0, mid: 0, treble: 0 };
     }
 
     /**
@@ -53,14 +58,14 @@ export class EnergyAnalyzer {
         //   bass:   bins 0 → 10%  ≈ 0–2.2 kHz  (most perceptual bass energy lives here)
         //   mid:    bins 10%→ 50% ≈ 2.2–11 kHz
         //   treble: bins 50%→100% ≈ 11–22 kHz
-        const bassEnd   = Math.floor(len * 0.10);
-        const midEnd    = Math.floor(len * 0.50);
+        const bassEnd = Math.floor(len * 0.10);
+        const midEnd = Math.floor(len * 0.50);
 
         // ── Calculate RMS for each slice ─────────────────────────────────────
-        const rmsGlobal = this._rms(frequencyData, 0,       len);
-        const rmsBass   = this._rms(frequencyData, 0,       bassEnd);
-        const rmsMid    = this._rms(frequencyData, bassEnd,  midEnd);
-        const rmsTreble = this._rms(frequencyData, midEnd,   len);
+        const rmsGlobal = this._rms(frequencyData, 0, len);
+        const rmsBass = this._rms(frequencyData, 0, bassEnd);
+        const rmsMid = this._rms(frequencyData, bassEnd, midEnd);
+        const rmsTreble = this._rms(frequencyData, midEnd, len);
 
         // ── Global noise gate ───────────────────────────────────────────────
         if (rmsGlobal < this._noiseFloor) {
@@ -71,6 +76,25 @@ export class EnergyAnalyzer {
             return this._value;
         }
 
+        // ── Onset / Punch detection (transient) ──────────────────────────────
+        // Punch = positive delta between current and previous raw RMS, amplified.
+        // This spikes only at the instant of a hit (e.g. kick, snare) and
+        // fast-decays, so it does NOT react to sustained sounds like pads or bass lines.
+        const punchGain = 5.0;  // amplify the delta so small hits still register
+        const bassPunchRaw = Math.max(0, rmsBass - this._prevRaw.bass) * punchGain;
+        const midPunchRaw = Math.max(0, rmsMid - this._prevRaw.mid) * punchGain;
+        const treblePunchRaw = Math.max(0, rmsTreble - this._prevRaw.treble) * punchGain;
+
+        // Hold the peak, then fast-decay (×0.55 per frame ≈ gone in ~10 frames)
+        this._bands.bass._punch = Math.max(Math.min(1, bassPunchRaw), this._bands.bass._punch * 0.55);
+        this._bands.mid._punch = Math.max(Math.min(1, midPunchRaw), this._bands.mid._punch * 0.55);
+        this._bands.treble._punch = Math.max(Math.min(1, treblePunchRaw), this._bands.treble._punch * 0.55);
+
+        // Store raw values for next frame delta
+        this._prevRaw.bass = rmsBass;
+        this._prevRaw.mid = rmsMid;
+        this._prevRaw.treble = rmsTreble;
+
         // ── Global energy ────────────────────────────────────────────────────
         this._value = this._processValue(rmsGlobal, this, 2.5);
 
@@ -79,9 +103,9 @@ export class EnergyAnalyzer {
         // bands can still be individually quiet even when the global passes the gate.
         const bandFloor = this._noiseFloor * 0.6;
 
-        this._bands.bass.value   = this._processBand(rmsBass,   this._bands.bass,   bandFloor, 2.2);
-        this._bands.mid.value    = this._processBand(rmsMid,    this._bands.mid,    bandFloor, 2.5);
-        this._bands.treble.value = this._processBand(rmsTreble, this._bands.treble, bandFloor, 2.8);
+        this._bands.bass._value = this._processBand(rmsBass, this._bands.bass, bandFloor, 2.2);
+        this._bands.mid._value = this._processBand(rmsMid, this._bands.mid, bandFloor, 2.5);
+        this._bands.treble._value = this._processBand(rmsTreble, this._bands.treble, bandFloor, 2.8);
 
         return this._value;
     }
@@ -166,6 +190,8 @@ export class EnergyAnalyzer {
         for (const b of Object.values(this._bands)) {
             b._value = (b._value ?? 0) * 0.85;
             if (b._value < 0.001) b._value = 0;
+            b._punch = (b._punch ?? 0) * 0.55;  // punch decays even faster
+            if (b._punch < 0.001) b._punch = 0;
         }
     }
 
@@ -173,8 +199,10 @@ export class EnergyAnalyzer {
     _resetBands() {
         for (const b of Object.values(this._bands)) {
             b._value = 0;
-            b._peak  = 0;
+            b._peak = 0;
+            b._punch = 0;
         }
+        this._prevRaw = { bass: 0, mid: 0, treble: 0 };
     }
 
     // ── Public API ───────────────────────────────────────────────────────────
@@ -183,23 +211,26 @@ export class EnergyAnalyzer {
     get value() { return this._value; }
 
     /**
-     * Frequency band energies, each 0–1.
-     * @returns {{ bass: number, mid: number, treble: number }}
+     * Frequency band energies and punch (onset transient) values, each 0–1.
+     * - `value`: sustained energy in the band (smoothed)
+     * - `punch`: transient spike at the moment of a hit (fast-decaying)
+     *            Use `bass.punch` for kick drums, `treble.punch` for hi-hats.
+     * @returns {{ bass: {value, punch}, mid: {value, punch}, treble: {value, punch} }}
      */
     get bands() {
         return {
-            bass:   this._bands.bass._value   ?? 0,
-            mid:    this._bands.mid._value    ?? 0,
-            treble: this._bands.treble._value ?? 0,
+            bass: { value: this._bands.bass._value ?? 0, punch: this._bands.bass._punch ?? 0 },
+            mid: { value: this._bands.mid._value ?? 0, punch: this._bands.mid._punch ?? 0 },
+            treble: { value: this._bands.treble._value ?? 0, punch: this._bands.treble._punch ?? 0 },
         };
     }
 
     /** Get or set the noise gate threshold (0–1) */
-    get noiseFloor()    { return this._noiseFloor; }
+    get noiseFloor() { return this._noiseFloor; }
     set noiseFloor(val) { this._noiseFloor = Math.max(0, Math.min(1, val)); }
 
     reset() {
-        this._value   = 0;
+        this._value = 0;
         this._peakAmp = 0;
         this._resetBands();
     }
