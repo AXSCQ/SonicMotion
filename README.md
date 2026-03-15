@@ -1,24 +1,33 @@
-# 🎵 SonicMotion.js v3.1.0
+# 🎵 SonicMotion.js 
+**The Audio-Reactive Web Motion Library for Frontend Developers**
 
-**Ultra-Lightweight Audio-Reactive UI Library (0 dependencies, ~10KB)**
+![npm bundle size](https://img.shields.io/bundlephobia/minzip/sonicmotion)
+![npm version](https://img.shields.io/npm/v/sonicmotion)
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
-Convierte tu interfaz web en un visualizador interactivo sincronizado con la música. Usa stems de audio (pistas separadas) y atributos HTML para controlar animaciones en tiempo real.
+Convierte tu interfaz web en una experiencia inmersiva. **SonicMotion** es una *Frontend Library* que utiliza la **Web Audio API** para analizar frecuencias de sonido en tiempo real y sincronizar animaciones del DOM al ritmo exacto de la música.
+
+A diferencia de proyectos académicos de audio espacial, SonicMotion está diseñada 100% para interactuar de forma sencilla con la UI de tu sitio web usando *Stems* de audio (pistas separadas como bajo, batería, voces) y atributos HTML para controlar animaciones en tiempo real sin dependencias.
+
+## ✨ Features
+
+- 🚀 **Audio-Reactive DOM Animation**: Haz que tus botones, fondos y textos reaccionen a la frecuencia del sonido.
+- 🎛️ **Stem-Driven Motion**: Anima elementos individuales basados en la batería, el bajo o las voces en tiempo real.
+- ⚡ **Zero-Dependencies**: Ultra ligera (~10KB).
+- 🎨 **Declarative HTML API**: Añade un atributo `data-sonic` a tu interfaz y deja que la magia ocurra sin escribir JavaScript animado complejo.
+- 🎧 **Frequency Band Analysis**: Aísla frecuencias graves, medias y agudas (bass/mid/treble) de forma nativa.
+
+## 🌟 Live Demos
+* [Experiencia Billie Jean - Tributo a Michael Jackson] (Poner enlace)
+* [Visualizador de Frecuencias Minimalista] (Poner enlace)
 
 ---
 
-## Instalación
+## 💻 Quick Start & Instalación
 
 ```bash
 npm install sonicmotion
 ```
-
-```javascript
-import SonicMotion from 'sonicmotion';
-```
-
----
-
-## Uso rápido
 
 ### 1. Inicializa con Master + Stems
 
@@ -26,7 +35,7 @@ import SonicMotion from 'sonicmotion';
 import SonicMotion from 'sonicmotion';
 
 const sonic = SonicMotion.create({
-    master: '/music/master.mp3',   // Audio que el usuario escucha
+    master: '/music/master.mp3',   // Audio principal que el usuario escucha
     stems: {
         kick:   '/music/kick.mp3',    // Bombo (analizado en silencio)
         bass:   '/music/bass.mp3',    // Bajo
@@ -34,36 +43,24 @@ const sonic = SonicMotion.create({
     }
 });
 
-sonic.initDOM(); // Escanea el DOM buscando [data-sonic]
+sonic.initDOM(); // Escanea el DOM buscando los atributos [data-sonic]
 ```
 
-### 2. Usa atributos HTML para las animaciones
+### 2. Usa atributos HTML para las animaciones (DOM Audio Animation)
 
 ```html
-<!-- Escala con el kick, solo cuando supera 80% de energía -->
-<div data-sonic="scale"
-     data-sonic-track="kick"
-     data-sonic-threshold="0.8">
+<!-- Este elemento crecerá con la energía del bombo (kick) -->
+<div data-sonic="scale" data-sonic-track="kick">
   Explota con el bombo
 </div>
 
-<!-- Brillo con los bajos del stem "bass" (banda de frecuencia baja) -->
-<h1 data-sonic="glow"
-    data-sonic-track="bass"
-    data-sonic-band="bass"
-    data-sonic-threshold="0.3">
-  Brilla con los graves
+<!-- Brillo con los graves (bass band) del bajo -->
+<h1 data-sonic="glow" data-sonic-track="bass" data-sonic-band="bass">
+  Brilla con frecuencias graves
 </h1>
-
-<!-- Vibración con los agudos de las voces -->
-<div data-sonic="shake"
-     data-sonic-track="vocals"
-     data-sonic-band="treble">
-  Tiembla con los sibilantes
-</div>
 ```
 
-### 3. Reproducir (requiere gesto del usuario)
+### 3. Reproducir (requiere interacción del usuario)
 
 ```javascript
 document.getElementById('play-btn').addEventListener('click', () => {
