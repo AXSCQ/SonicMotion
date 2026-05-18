@@ -1,6 +1,6 @@
 {
   "name": "sonicmotion",
-  "version": "4.0.1",
+  "version": "4.0.2",
   "description": "Lightweight audio-reactive DOM animation library. Sincroniza movimientos web con música usando Stems y Web Audio API. Zero dependencies.",
   "main": "src/sonicmotion.js",
   "module": "src/sonicmotion.js",
