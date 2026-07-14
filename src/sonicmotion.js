@@ -120,8 +120,43 @@ class SonicMotionInstance {
         this._audioManager.seekPercent(pct);
     }
 
-    setVolume(vol) {
-        this._audioManager.setVolume(vol);
+    /**
+     * Set volume.
+     *  - setVolume(0.8)            → master track volume
+     *  - setVolume('vocals', 0.8)  → individual stem volume (per-stem mixing)
+     */
+    setVolume(stemOrVol, maybeVol) {
+        if (typeof stemOrVol === 'string') {
+            this._audioManager.setStemVolume(stemOrVol, maybeVol);
+        } else {
+            this._audioManager.setVolume(stemOrVol);
+        }
+        return this;
+    }
+
+    /**
+     * Set an individual stem's audible volume (0.0 to 1.0).
+     * Combine with setVolume(0) to mute the master and mix from stems only.
+     */
+    setStemVolume(name, vol) {
+        this._audioManager.setStemVolume(name, vol);
+        return this;
+    }
+
+    getStemVolume(name) {
+        return this._audioManager.getStemVolume(name);
+    }
+
+    /**
+     * Switch to per-stem mixing mode: mutes the master track (it keeps
+     * driving the clock) and raises every stem to the given volume.
+     */
+    enableStemMix(initialVolume = 1.0) {
+        this._audioManager.setVolume(0);
+        for (const name of this._audioManager.getStemNames()) {
+            this._audioManager.setStemVolume(name, initialVolume);
+        }
+        return this;
     }
 
     getVolume() {

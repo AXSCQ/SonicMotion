@@ -136,8 +136,31 @@ export class SyncAudioManager {
             silentGain,
             frequencyData,
             energyAnalyzer,
-            currentValue: 0
+            currentValue: 0,
+            volume: 0
         });
+    }
+
+    /**
+     * Set an individual stem's audible volume (0.0 to 1.0).
+     * By default stems are silent (analysis-only) and the master track carries
+     * the audio. Raising a stem's volume routes its signal to the speakers,
+     * enabling true per-stem mixing. Combine with setVolume(0) on the master
+     * so the audible mix comes exclusively from the stems (the muted master
+     * keeps acting as the sync clock).
+     */
+    setStemVolume(name, vol) {
+        const stem = this.stems.get(name);
+        if (!stem) return false;
+        const v = Math.max(0, Math.min(1, Number(vol) || 0));
+        stem.silentGain.gain.value = v;
+        stem.volume = v;
+        return true;
+    }
+
+    getStemVolume(name) {
+        const stem = this.stems.get(name);
+        return stem ? stem.volume : null;
     }
 
     removeStem(name) {
@@ -246,7 +269,8 @@ export class SyncAudioManager {
      * Set master volume (0.0 to 1.0)
      */
     setVolume(vol) {
-        this._volume = Math.max(0, Math.min(1, vol));
+        const v = Number(vol);
+        this._volume = Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
         if (this.masterAudio) this.masterAudio.volume = this._volume;
     }
 
