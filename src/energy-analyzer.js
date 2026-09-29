@@ -37,6 +37,11 @@ export class EnergyAnalyzer {
 
         // Raw RMS from previous frame — used to compute onset delta
         this._prevRaw = { bass: 0, mid: 0, treble: 0 };
+
+        // Trend: fast (~0.25 s) and slow (~4 s) averages of the global value.
+        // `rising` says the stem is building up; `drop` spikes when it jumps
+        // from a quiet stretch to a loud one (a "drop"), then decays.
+        this._trend = { fast: 0, slow: 0, drop: 0 };
     }
 
     /**
@@ -73,6 +78,7 @@ export class EnergyAnalyzer {
             this._value *= 0.85;
             if (this._value < 0.001) this._value = 0;
             this._decayBands();
+            this._updateTrend();
             return this._value;
         }
 
@@ -107,7 +113,26 @@ export class EnergyAnalyzer {
         this._bands.mid._value = this._processBand(rmsMid, this._bands.mid, bandFloor, 2.5);
         this._bands.treble._value = this._processBand(rmsTreble, this._bands.treble, bandFloor, 2.8);
 
+        this._updateTrend();
         return this._value;
+    }
+
+    /**
+     * Rolling averages of the global value (called once per analyzed frame,
+     * so the time constants assume ~60 fps). A drop fires when the fast
+     * average leaps well above a quiet slow average; it holds at 1 and
+     * decays over ~0.5 s so callers polling each frame can't miss it.
+     */
+    _updateTrend() {
+        const t = this._trend;
+        const wasQuiet = t.slow < 0.3;
+        const prevFast = t.fast;
+        t.fast += (this._value - t.fast) * 0.07;
+        t.slow += (this._value - t.slow) * 0.004;
+        const jump = t.fast - t.slow;
+        if (wasQuiet && jump > 0.3 && prevFast - t.slow <= 0.3) t.drop = 1;
+        else t.drop *= 0.93;
+        if (t.drop < 0.001) t.drop = 0;
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
@@ -225,6 +250,20 @@ export class EnergyAnalyzer {
         };
     }
 
+    /**
+     * Energy trend of the stem:
+     * - `fast` / `slow`: ~0.25 s and ~4 s averages of `value`
+     * - `rising`: 0–1, how far the fast average is above the slow one
+     *             (a build-up in progress)
+     * - `drop`:   1 at the instant the stem jumps from a quiet stretch to
+     *             a loud one, decaying to 0 in ~0.5 s
+     * @returns {{ fast: number, slow: number, rising: number, drop: number }}
+     */
+    get trend() {
+        const t = this._trend;
+        return { fast: t.fast, slow: t.slow, rising: Math.max(0, Math.min(1, (t.fast - t.slow) * 2.5)), drop: t.drop };
+    }
+
     /** Get or set the noise gate threshold (0–1) */
     get noiseFloor() { return this._noiseFloor; }
     set noiseFloor(val) { this._noiseFloor = Math.max(0, Math.min(1, val)); }
@@ -233,5 +272,6 @@ export class EnergyAnalyzer {
         this._value = 0;
         this._peakAmp = 0;
         this._resetBands();
+        this._trend = { fast: 0, slow: 0, drop: 0 };
     }
 }

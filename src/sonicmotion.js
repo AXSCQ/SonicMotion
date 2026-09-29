@@ -104,6 +104,21 @@ class SonicMotionInstance {
 
     pause() {
         this._audioManager.pause();
+        // nothing changes while paused: stop the analysis/effects loops too
+        // (play() restarts them)
+        this._stopLoop();
+        // one last silent frame, so onFrame listeners settle to rest instead
+        // of freezing on the energy of the instant the music stopped
+        if (this._onFrameCallbacks.length > 0) {
+            const silent = { value: 0, bands: { bass: { value: 0, punch: 0 }, mid: { value: 0, punch: 0 }, treble: { value: 0, punch: 0 } }, trend: { fast: 0, slow: 0, rising: 0, drop: 0 } };
+            const data = {};
+            for (const name of this._audioManager.getStemNames()) data[name] = silent;
+            data._time = this._audioManager.currentTime;
+            data._duration = this._audioManager.duration;
+            for (const cb of this._onFrameCallbacks) {
+                try { cb(data); } catch (e) { /* */ }
+            }
+        }
     }
 
     stop() {
@@ -183,8 +198,19 @@ class SonicMotionInstance {
         if (!stem) return null;
         return {
             value: stem.currentValue,
-            bands: stem.currentBands ?? { bass: 0, mid: 0, treble: 0 }
+            bands: stem.currentBands ?? { bass: 0, mid: 0, treble: 0 },
+            trend: stem.currentTrend ?? { fast: 0, slow: 0, rising: 0, drop: 0 }
         };
+    }
+
+    /**
+     * Raw spectrum of a stem for this frame (Uint8Array, 0–255 per FFT bin),
+     * e.g. to feed SonicWave's equalizer/spectrum renderers. It is the live
+     * buffer: copy it if you need to keep it past the current frame.
+     */
+    getSpectrum(stemName) {
+        const stem = this._audioManager.stems.get(stemName);
+        return stem ? stem.frequencyData : null;
     }
 
     get stemNames() {
@@ -236,6 +262,9 @@ class SonicMotionInstance {
 
     _stopLoop() {
         this._animating = false;
+        // cancel the pending frame so a quick pause→play can't leave two loops running
+        if (this._frameRaf) cancelAnimationFrame(this._frameRaf);
+        this._frameRaf = null;
         this._effects.stop();
     }
 
@@ -249,7 +278,8 @@ class SonicMotionInstance {
                 if (stem) {
                     data[name] = {
                         value: stem.currentValue,
-                        bands: stem.currentBands ?? { bass: 0, mid: 0, treble: 0 }
+                        bands: stem.currentBands ?? { bass: 0, mid: 0, treble: 0 },
+                        trend: stem.currentTrend ?? { fast: 0, slow: 0, rising: 0, drop: 0 }
                     };
                 }
             }
@@ -261,7 +291,7 @@ class SonicMotionInstance {
             }
         }
 
-        requestAnimationFrame(() => this._frameLoop());
+        this._frameRaf = requestAnimationFrame(() => this._frameLoop());
     }
 }
 

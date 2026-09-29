@@ -184,8 +184,12 @@ export class SyncAudioManager {
             const masterTime = this.masterAudio.currentTime;
 
             for (const [name, stem] of this.stems) {
-                // If a stem drifts more than 50ms from master, force sync it
-                if (Math.abs(stem.audio.currentTime - masterTime) > 0.05) {
+                // If a stem drifts from master, force sync it. Silent
+                // (analysis-only) stems can be re-seeked aggressively; an
+                // audible stem (per-stem mixing) gets a wider tolerance,
+                // since every seek is heard as a click/stutter.
+                const tolerance = stem.volume > 0 ? 0.25 : 0.05;
+                if (Math.abs(stem.audio.currentTime - masterTime) > tolerance) {
                     stem.audio.currentTime = masterTime;
                 }
             }
@@ -197,7 +201,8 @@ export class SyncAudioManager {
             const bands = stem.energyAnalyzer.bands;
             stem.currentValue = value;
             stem.currentBands = bands;
-            results.set(name, { value, bands });
+            stem.currentTrend = stem.energyAnalyzer.trend;
+            results.set(name, { value, bands, trend: stem.currentTrend });
         }
 
         return results;
