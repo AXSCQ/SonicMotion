@@ -7,7 +7,7 @@
  * @version 3.0.0
  */
 
-import { SyncAudioManager } from './stem-manager.js';
+import { SyncAudioManager, stemData, SILENT_STEM } from './stem-manager.js';
 import { EffectsController } from './effects-controller.js';
 import { EFFECTS, registerEffect } from './effects/index.js';
 
@@ -17,9 +17,12 @@ class SonicMotionInstance {
         this._effects = new EffectsController();
         this._onFrameCallbacks = [];
         this._animating = false;
-
-        // Wire effects to continuous stem data
-        this._effects.setDataSource(() => this._audioManager.update());
+        // The analysers read the audio BEFORE it reaches the speakers: what
+        // they see is heard `outputLatency` later (≈ 40–50 ms on Windows,
+        // 150–300 ms over Bluetooth). With compensation on, every frame of
+        // data (and _time) is delivered when its sound is actually heard.
+        this._compensateLatency = config.compensateLatency ?? true;
+        this._frameQueue = [];
 
         // Load if config provided
         if (config.master) {
@@ -76,9 +79,12 @@ class SonicMotionInstance {
      * @param {string} name - Stem identifier
      * @param {string|File|Blob} source - Audio source URL, File, or Blob
      * @param {object} [options] - Options
-     * @param {number} [options.noiseFloor=0.08] - Noise gate threshold (0.0–1.0). Signals
-     *   below this RMS level are treated as silence and produce zero output. Raise this
-     *   value (e.g. 0.15) if a stem is too reactive to quiet background noise.
+     * @param {number} [options.noiseFloor=0.05] - `value` below this (0–1) is reported as 0.
+     *   Raise it (e.g. 0.15) if a stem reacts to quiet background sound.
+     * @param {number} [options.gateDb=-60] - RMS below this (dBFS) is silence.
+     * @param {number} [options.onsetThreshold=2] - onset sensitivity: higher = fewer,
+     *   surer onsets (3 suits sustained bass lines).
+     * @param {number} [options.minOnsetGapMs=80] - minimum time between two onsets.
      */
     addStem(name, source, options = {}) {
         this._audioManager.addStem(name, source, options);
@@ -110,9 +116,8 @@ class SonicMotionInstance {
         // one last silent frame, so onFrame listeners settle to rest instead
         // of freezing on the energy of the instant the music stopped
         if (this._onFrameCallbacks.length > 0) {
-            const silent = { value: 0, bands: { bass: { value: 0, punch: 0 }, mid: { value: 0, punch: 0 }, treble: { value: 0, punch: 0 } }, trend: { fast: 0, slow: 0, rising: 0, drop: 0 } };
             const data = {};
-            for (const name of this._audioManager.getStemNames()) data[name] = silent;
+            for (const name of this._audioManager.getStemNames()) data[name] = SILENT_STEM;
             data._time = this._audioManager.currentTime;
             data._duration = this._audioManager.duration;
             for (const cb of this._onFrameCallbacks) {
@@ -193,14 +198,14 @@ class SonicMotionInstance {
         this._onFrameCallbacks = [];
     }
 
+    /**
+     * Latest data of a stem: { value, level, onset, bands, trend } — the same
+     * shape onFrame receives. Null for an unknown stem.
+     */
     getValue(stemName) {
         const stem = this._audioManager.stems.get(stemName);
         if (!stem) return null;
-        return {
-            value: stem.currentValue,
-            bands: stem.currentBands ?? { bass: 0, mid: 0, treble: 0 },
-            trend: stem.currentTrend ?? { fast: 0, slow: 0, rising: 0, drop: 0 }
-        };
+        return stem.currentData ?? SILENT_STEM;
     }
 
     /**
@@ -223,6 +228,28 @@ class SonicMotionInstance {
 
     get currentTime() {
         return this._audioManager.currentTime;
+    }
+
+    /**
+     * Output latency being compensated, in seconds (0 when compensation is
+     * off or the browser does not report it).
+     */
+    get latency() {
+        if (!this._compensateLatency) return 0;
+        const ctx = this._audioManager.ctx;
+        if (!ctx) return 0;
+        const lat = (ctx.outputLatency || 0) + (ctx.baseLatency || 0);
+        return Number.isFinite(lat) ? Math.min(0.5, Math.max(0, lat)) : 0;
+    }
+
+    /**
+     * The second of the song that is being HEARD right now (currentTime minus
+     * the output latency, while playing). Use it for anything shown in sync
+     * with the music: lyrics, timed events.
+     */
+    get audibleTime() {
+        const t = this._audioManager.currentTime;
+        return this._audioManager.isPlaying ? Math.max(0, t - this.latency) : t;
     }
 
     get duration() {
@@ -262,28 +289,43 @@ class SonicMotionInstance {
 
     _stopLoop() {
         this._animating = false;
+        this._frameQueue = [];
         // cancel the pending frame so a quick pause→play can't leave two loops running
         if (this._frameRaf) cancelAnimationFrame(this._frameRaf);
         this._frameRaf = null;
         this._effects.stop();
     }
 
+    /**
+     * One loop for everything, in order: analyze the stems (and keep them in
+     * sync), apply the DOM effects, then call onFrame — all with the data of
+     * this same frame (analysis and callbacks used to run in two separate
+     * loops, so a callback could get the previous frame).
+     */
     _frameLoop() {
         if (!this._animating) return;
 
-        if (this._onFrameCallbacks.length > 0) {
+        const now = performance.now();
+        const fresh = { at: now, results: this._audioManager.update(), time: this._audioManager.currentTime };
+
+        // Latency compensation: queue the frame and deliver the newest one
+        // whose sound is already coming out of the speakers.
+        let frame = fresh;
+        const latMs = this.latency * 1000;
+        if (latMs > 0) {
+            const q = this._frameQueue;
+            q.push(fresh);
+            while (q.length > 1 && q[1].at <= now - latMs) q.shift();
+            frame = q[0].at <= now - latMs ? q[0] : null;
+        }
+
+        if (frame) this._effects.tick(frame.results);
+
+        if (frame && this._onFrameCallbacks.length > 0) {
             const data = {};
-            for (const name of this._audioManager.getStemNames()) {
-                const stem = this._audioManager.stems.get(name);
-                if (stem) {
-                    data[name] = {
-                        value: stem.currentValue,
-                        bands: stem.currentBands ?? { bass: 0, mid: 0, treble: 0 },
-                        trend: stem.currentTrend ?? { fast: 0, slow: 0, rising: 0, drop: 0 }
-                    };
-                }
-            }
-            data._time = this._audioManager.currentTime;
+            for (const [name, d] of frame.results) data[name] = d;
+            data._time = frame.time;
+            data._latency = this.latency;
             data._duration = this._audioManager.duration;
 
             for (const cb of this._onFrameCallbacks) {
@@ -306,9 +348,9 @@ const SonicMotion = {
     get effects() {
         return Object.keys(EFFECTS);
     },
-    version: '4.0.0',
+    version: '4.2.0',
     formatTime: SonicMotionInstance.formatTime
 };
 
 export default SonicMotion;
-export { SonicMotionInstance, SonicMotion };
+export { SonicMotionInstance, SonicMotion, stemData };

@@ -82,12 +82,14 @@ document.getElementById('play-btn').addEventListener('click', () => {
 
 ### Bandas de frecuencia (`data-sonic-band`)
 
-| Banda | Rango aprox. | Captura |
+| Banda | Rango | Captura |
 |---|---|---|
-| `bass` | 0 – 2.2 kHz | Kick, bombo, sub-bass |
-| `mid` | 2.2 – 11 kHz | Snare, guitarra, voz principal |
-| `treble` | 11 – 22 kHz | Hi-hats, platillos, brillos |
+| `bass` | 20 – 250 Hz | Kick, bombo, bajo, sub-bass |
+| `mid` | 250 Hz – 4 kHz | Snare, guitarra, voz principal |
+| `treble` | 4 – 16 kHz | Hi-hats, platillos, brillos |
 | *(sin atributo)* | global | Energía total del stem |
+
+Sub-campos: `bass.punch` (salto brusco de la banda) y `bass.onset` (ataque).
 
 ---
 
@@ -102,16 +104,18 @@ const sonic = SonicMotion.create({
         kick: '/audio/kick.mp3',      // string URL
         bass: fileObject,              // o File / Blob
     },
-    noiseFloor: 0.08  // Umbral de ruido global (0.0–1.0). Default: 0.08
+    compensateLatency: true  // entrega los datos cuando su sonido SE ESCUCHA (default)
 });
 ```
 
 ### `sonic.addStem(name, source, options?)`
 
 ```javascript
-// Agregar un stem con noise gate personalizado
-sonic.addStem('hihat', '/audio/hihat.mp3', {
-    noiseFloor: 0.12   // más alto = solo golpes fuertes
+sonic.addStem('bass', '/audio/bass.mp3', {
+    noiseFloor: 0.05,       // `value` por debajo de esto se reporta como 0 (0–1)
+    gateDb: -60,            // RMS por debajo de esto (dBFS) es silencio
+    onsetThreshold: 3,      // sensibilidad de ataques: más alto = menos y más seguros (default 2)
+    minOnsetGapMs: 120,     // separación mínima entre ataques (default 80)
 });
 ```
 
@@ -131,11 +135,16 @@ sonic.bind('#my-element', {
 
 ```javascript
 sonic.onFrame((data) => {
-    // data.kick.value   → energía global del stem (0–1)
-    // data.kick.bands.bass    → energía en graves (0–1)
-    // data.kick.bands.mid     → energía en medios (0–1)
-    // data.kick.bands.treble  → energía en agudos (0–1)
-    console.log(data.kick.bands.bass);
+    // data.kick.value          → sonoridad del stem (0–1), relativa a su propio pico
+    // data.kick.level          → nivel RMS real en dBFS
+    // data.kick.onset          → 0–1 SOLO en el cuadro del ataque (nota, golpe, sílaba)
+    // data.kick.bands.bass     → { value, punch, onset } de 20–250 Hz
+    // data.kick.bands.mid      → { value, punch, onset } de 250 Hz–4 kHz
+    // data.kick.bands.treble   → { value, punch, onset } de 4–16 kHz
+    // data.kick.trend          → { fast, slow, rising, drop }
+    // data._time               → segundo de la canción de ESTE cuadro (ya compensado)
+    // data._latency            → latencia de salida compensada (s)
+    if (data.kick.bands.bass.onset > 0) flash();
 });
 ```
 
@@ -145,6 +154,9 @@ sonic.onFrame((data) => {
 sonic.play()      // Reproduce
 sonic.pause()     // Pausa
 sonic.seek(time)  // Salta al segundo `time`
+sonic.audibleTime // Segundo que SE ESCUCHA ahora (para letra y eventos con tiempo)
+sonic.latency     // Latencia de salida que se compensa (s)
+sonic.getValue(stem) // Últimos datos del stem, mismo formato que onFrame
 sonic.initDOM()   // Re-escanea el DOM
 sonic.destroy()   // Limpia todos los recursos
 ```
@@ -175,6 +187,18 @@ SonicMotion.registerEffect('my-effect', (element, value, config) => {
 ```
 
 ---
+
+## Cambios v4.2.0
+
+- **Energía real** — el nivel sale del RMS verdadero de la señal (dBFS), no de un promedio de los bytes en dB del espectro.
+- **Bandas por frecuencia real** — bass 20–250 Hz, mid 250 Hz–4 kHz, treble 4–16 kHz (antes "bass" cubría 0–2,2 kHz). FFT de 2048.
+- **Stems casi vacíos quedan en 0** — la ganancia automática tiene una referencia absoluta (−24 dBFS): una fuga a −60 dBFS ya no se estira hasta 1.
+- **`onset` por stem y por banda** — flujo espectral con umbral adaptativo, calibrado contra los ataques reales de 12 stems (F ≈ 0,9).
+- **Compensación de latencia** — los datos llegan cuando su sonido sale por los parlantes (`outputLatency`, ≈ 50 ms en Windows); `audibleTime` para la letra.
+- **Un solo bucle** — análisis, efectos DOM y `onFrame` en el mismo cuadro (antes eran dos y podía llegar el cuadro anterior).
+- **Suavizado por tiempo** — igual a 30, 60 o 144 fps.
+- `data-sonic-track` por defecto (`master`) sigue al stem más fuerte (antes quedaba en 0).
+- Pruebas: `npm test` (node:test).
 
 ## Cambios v3.1.0
 

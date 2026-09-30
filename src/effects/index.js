@@ -118,6 +118,11 @@ function mergeTransform(element, type, transformStr) {
     return Object.values(transforms).join(' ');
 }
 
+/** Forget the tracked transforms of an element (on unbind, so a new binding starts clean). */
+export function clearTransforms(element) {
+    _transformMap.delete(element);
+}
+
 // Export all effects as a registry
 export const EFFECTS = {
     scale,

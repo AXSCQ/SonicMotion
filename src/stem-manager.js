@@ -6,6 +6,22 @@
  */
 import { EnergyAnalyzer } from './energy-analyzer.js';
 
+/**
+ * The per-frame data of one stem, in the same shape everywhere
+ * (onFrame, getValue, the effects loop).
+ * @param {EnergyAnalyzer} ea
+ */
+export function stemData(ea) {
+    return { value: ea.value, level: ea.level, onset: ea.onset, bands: ea.bands, trend: ea.trend };
+}
+
+/** Data of a stem at rest (before the first frame, or after pause). */
+export const SILENT_STEM = Object.freeze({
+    value: 0, level: -Infinity, onset: 0,
+    bands: { bass: { value: 0, punch: 0, onset: 0 }, mid: { value: 0, punch: 0, onset: 0 }, treble: { value: 0, punch: 0, onset: 0 } },
+    trend: { fast: 0, slow: 0, rising: 0, drop: 0 },
+});
+
 export class SyncAudioManager {
     constructor() {
         this.ctx = null;
@@ -104,17 +120,22 @@ export class SyncAudioManager {
         }
 
         audio.crossOrigin = 'anonymous';
-        audio.preload = 'metadata';
+        // 'auto': a stem that only loaded its metadata starts late when play()
+        // is called and has to be re-seeked to catch up with the master.
+        audio.preload = 'auto';
         // Note: Do NOT set audio.muted = true or audio.volume = 0 here.
         // In Chrome/Edge, doing so will output silence to the MediaElementAudioSourceNode.
         // The stem is already silenced by the silentGain node below this.
 
         const mediaSource = this.ctx.createMediaElementSource(audio);
         const analyser = this.ctx.createAnalyser();
-        analyser.fftSize = 512; // Fast response for global volume
-        // Lower smoothing = faster response to silence. 0.3 prevents ghost energy
-        // from lingering between frames. We also do our own smoothing in EnergyAnalyzer.
-        analyser.smoothingTimeConstant = 0.3;
+        // 2048 bins → ~23 Hz per bin at 48 kHz: enough resolution for a real
+        // 20–250 Hz bass band. The level is measured on the latest ~20 ms of
+        // samples, so the bigger FFT does not slow the energy down.
+        analyser.fftSize = 2048;
+        // No smoothing from the browser: EnergyAnalyzer smooths in time and
+        // needs the raw spectrum for onset detection.
+        analyser.smoothingTimeConstant = 0;
 
         mediaSource.connect(analyser); // Connect to analyser
         // Do NOT connect analyser to destination
@@ -126,7 +147,12 @@ export class SyncAudioManager {
         silentGain.connect(this.ctx.destination);
 
         const frequencyData = new Uint8Array(analyser.frequencyBinCount);
-        const energyAnalyzer = new EnergyAnalyzer({ noiseFloor: options.noiseFloor });
+        const energyAnalyzer = new EnergyAnalyzer({
+            noiseFloor: options.noiseFloor,
+            gateDb: options.gateDb,
+            minOnsetGapMs: options.minOnsetGapMs,
+            onsetThreshold: options.onsetThreshold,
+        });
 
         this.stems.set(name, {
             name,
@@ -135,6 +161,8 @@ export class SyncAudioManager {
             analyser,
             silentGain,
             frequencyData,
+            timeData: new Float32Array(analyser.fftSize),
+            freqDb: new Float32Array(analyser.frequencyBinCount),
             energyAnalyzer,
             currentValue: 0,
             volume: 0
@@ -195,14 +223,25 @@ export class SyncAudioManager {
             }
         }
 
+        const nowMs = performance.now();
+        const sampleRate = this.ctx ? this.ctx.sampleRate : 48000;
         for (const [name, stem] of this.stems) {
-            stem.analyser.getByteFrequencyData(stem.frequencyData);
-            const value = stem.energyAnalyzer.analyze(stem.frequencyData);
-            const bands = stem.energyAnalyzer.bands;
-            stem.currentValue = value;
-            stem.currentBands = bands;
-            stem.currentTrend = stem.energyAnalyzer.trend;
-            results.set(name, { value, bands, trend: stem.currentTrend });
+            const ea = stem.energyAnalyzer;
+            if (this.isPlaying) {
+                stem.analyser.getFloatTimeDomainData(stem.timeData);
+                stem.analyser.getFloatFrequencyData(stem.freqDb);
+                // byte spectrum kept for getSpectrum() (visualizers)
+                stem.analyser.getByteFrequencyData(stem.frequencyData);
+                ea.analyze({ timeData: stem.timeData, freqDb: stem.freqDb, sampleRate, nowMs });
+            } else {
+                ea.idle(nowMs);
+            }
+            const data = stemData(ea);
+            stem.currentValue = data.value;
+            stem.currentBands = data.bands;
+            stem.currentTrend = data.trend;
+            stem.currentData = data;
+            results.set(name, data);
         }
 
         return results;

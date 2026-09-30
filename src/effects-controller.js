@@ -2,7 +2,7 @@
  * EffectsController — Scans the DOM for [data-sonic] attributes and applies 
  * visual animations synchronized with stem intensities.
  */
-import { EFFECTS, registerEffect } from './effects/index.js';
+import { EFFECTS, registerEffect, clearTransforms } from './effects/index.js';
 
 export class EffectsController {
     constructor() {
@@ -105,6 +105,7 @@ export class EffectsController {
 
     unbindAll() {
         for (const b of this._bindings) {
+            clearTransforms(b.element);
             b.element.style.willChange = '';
             b.element.style.transition = '';
             b.element.style.transform = '';
@@ -116,17 +117,11 @@ export class EffectsController {
     }
 
     start() {
-        if (this._running) return;
         this._running = true;
-        this._loop();
     }
 
     stop() {
         this._running = false;
-        if (this._rafId) {
-            cancelAnimationFrame(this._rafId);
-            this._rafId = null;
-        }
         // Gracefully reset all elements
         for (const binding of this._bindings) {
             binding.effectFn(binding.element, 0, binding.config);
@@ -135,23 +130,25 @@ export class EffectsController {
     }
 
     /**
-     * Main animation loop
+     * Apply one frame of stem data to every binding. Called by the
+     * SonicMotion loop right after the stems are analyzed.
+     * @param {Map<string, {value, bands}>} stemData
      */
-    _loop() {
+    tick(stemData) {
         if (!this._running) return;
+        stemData = stemData ?? (this._stemDataFn ? this._stemDataFn() : new Map());
 
-        // Fetch the latest intensities for all stems
-        const stemData = this._stemDataFn ? this._stemDataFn() : new Map();
-
-        // // Debug logging (approx every 60 frames / 1 sec)
-        // if (Math.random() < 0.02) {
-        //     const printData = {};
-        //     for (const [key, val] of stemData.entries()) printData[key] = val.value.toFixed(3);
-        //     console.log("SonicMotion Debug Energy:", printData);
-        // }
+        // 'master' (the default track of [data-sonic]) is not analyzed on its
+        // own: it follows the loudest stem of the frame
+        let master = null;
+        const masterOf = () => {
+            if (master) return master;
+            for (const d of stemData.values()) if (!master || d.value > master.value) master = d;
+            return master;
+        };
 
         for (const binding of this._bindings) {
-            const data = stemData.get(binding.stem);
+            const data = stemData.get(binding.stem) ?? (binding.stem === 'master' ? masterOf() : undefined);
 
             // Resolve intensity: support band notation 'bass', 'mid', 'treble'
             // and sub-field notation 'bass.punch', 'mid.punch', 'treble.punch'.
@@ -210,8 +207,6 @@ export class EffectsController {
             // Apply to DOM
             binding.effectFn(binding.element, binding.config.currentValue, binding.config);
         }
-
-        this._rafId = requestAnimationFrame(() => this._loop());
     }
 
     get availableEffects() {
