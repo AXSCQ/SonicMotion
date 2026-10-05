@@ -5,6 +5,7 @@
  * Each stem is loaded, muted, and tightly synced to the master's clock.
  */
 import { EnergyAnalyzer } from './energy-analyzer.js';
+import { SyncProbe } from './sync-probe.js';
 
 /**
  * The per-frame data of one stem, in the same shape everywhere
@@ -28,6 +29,10 @@ export class SyncAudioManager {
         /** @type {HTMLAudioElement|null} */
         this.masterAudio = null;
         this.masterSource = null;
+        this.masterGain = null;
+        /** @type {SyncProbe|null} measures how late the stems really sound */
+        this.syncProbe = null;
+        this._probeKey = '';
 
         /** @type {Map<string, StemEntry>} */
         this.stems = new Map();
@@ -84,9 +89,15 @@ export class SyncAudioManager {
         }
 
         this.masterAudio.crossOrigin = 'anonymous';
-        this.masterAudio.volume = this._volume;
+        // the element stays at full volume and a gain node does the muting:
+        // the sync probe needs the master's signal even when it is silent
+        this.masterAudio.volume = 1;
         this.masterSource = this.ctx.createMediaElementSource(this.masterAudio);
-        this.masterSource.connect(this.ctx.destination); // Audible!
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.value = this._volume;
+        this.masterSource.connect(this.masterGain);
+        this.masterGain.connect(this.ctx.destination); // Audible!
+        this._probeKey = '';
 
         // Hook up sync events
         this._onMasterTimeUpdate = this._onMasterTimeUpdate.bind(this);
@@ -266,6 +277,7 @@ export class SyncAudioManager {
             }));
         }
 
+        this._ensureProbe();
         try {
             await Promise.allSettled(promises);
             this.isPlaying = true;
@@ -315,7 +327,7 @@ export class SyncAudioManager {
     setVolume(vol) {
         const v = Number(vol);
         this._volume = Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
-        if (this.masterAudio) this.masterAudio.volume = this._volume;
+        if (this.masterGain) this.masterGain.gain.value = this._volume;
     }
 
     getVolume() {
@@ -334,6 +346,34 @@ export class SyncAudioManager {
     _onMasterSeeking() {
         // When user explicitly drags the tracker or seeks
         this._syncStemsToMaster();
+        // every element lands on its own MP3 frame: measure the lag again
+        this.syncProbe?.reset();
+    }
+
+    /** (Re)connects the sync probe to the master and the current stems. */
+    _ensureProbe() {
+        if (!this.ctx || !this.masterSource || !this.stems.size) return;
+        const key = [...this.stems.keys()].join('|');
+        if (this.syncProbe && this._probeKey === key) return;
+        this._probeKey = key;
+        this.syncProbe ??= new SyncProbe(this.ctx);
+        this.syncProbe.reset();
+        this.syncProbe.connect(this.masterSource, [...this.stems.values()].map(s => s.mediaSource));
+    }
+
+    /** True when what is heard comes from the stems (per-stem mixing, master muted). */
+    get stemsAudible() {
+        if (this._volume > 0.001) return false;
+        for (const [, s] of this.stems) if (s.volume > 0) return true;
+        return false;
+    }
+
+    /**
+     * Seconds the audible stems sound later than the master (measured on the
+     * audio by the sync probe; 0 until measured or when the master is heard).
+     */
+    get syncOffset() {
+        return this.stemsAudible && this.syncProbe ? this.syncProbe.offset : 0;
     }
 
     _syncStemsToMaster() {
@@ -347,7 +387,14 @@ export class SyncAudioManager {
     // --- Getters ---
 
     get duration() { return this.masterAudio ? this.masterAudio.duration || 0 : 0; }
-    get currentTime() { return this.masterAudio ? this.masterAudio.currentTime || 0 : 0; }
+    /**
+     * The song position of what is being heard: the master's, minus how late
+     * the stems really sound when they carry the mix (syncOffset).
+     */
+    get currentTime() {
+        if (!this.masterAudio) return 0;
+        return Math.max(0, (this.masterAudio.currentTime || 0) - this.syncOffset);
+    }
     getStemNames() { return Array.from(this.stems.keys()); }
 
     destroy() {
@@ -358,6 +405,8 @@ export class SyncAudioManager {
             this.masterAudio.removeEventListener('ended', this._onMasterEnded);
         }
         if (this.masterSource) try { this.masterSource.disconnect(); } catch (e) { /* */ }
+        this.syncProbe?.disconnect();
+        this.syncProbe = null;
         for (const [name] of this.stems) this.removeStem(name);
         if (this.ctx) this.ctx.close();
         this._listeners.clear();

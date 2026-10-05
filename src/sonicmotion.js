@@ -247,6 +247,15 @@ class SonicMotionInstance {
      * the output latency, while playing). Use it for anything shown in sync
      * with the music: lyrics, timed events.
      */
+    /**
+     * Seconds the audible stems sound later than the master clock, measured
+     * on the audio (per-stem mixing only; see sync-probe.js). currentTime
+     * and audibleTime already subtract it.
+     */
+    get syncOffset() {
+        return this._audioManager.syncOffset;
+    }
+
     get audibleTime() {
         const t = this._audioManager.currentTime;
         return this._audioManager.isPlaying ? Math.max(0, t - this.latency) : t;
@@ -326,6 +335,7 @@ class SonicMotionInstance {
             for (const [name, d] of frame.results) data[name] = d;
             data._time = frame.time;
             data._latency = this.latency;
+            data._syncOffset = this._audioManager.syncOffset;
             data._duration = this._audioManager.duration;
 
             for (const cb of this._onFrameCallbacks) {
@@ -348,7 +358,7 @@ const SonicMotion = {
     get effects() {
         return Object.keys(EFFECTS);
     },
-    version: '4.2.0',
+    version: '4.3.0',
     formatTime: SonicMotionInstance.formatTime
 };
 

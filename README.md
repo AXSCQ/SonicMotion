@@ -144,6 +144,7 @@ sonic.onFrame((data) => {
     // data.kick.trend          → { fast, slow, rising, drop }
     // data._time               → segundo de la canción de ESTE cuadro (ya compensado)
     // data._latency            → latencia de salida compensada (s)
+    // data._syncOffset         → cuánto más tarde suenan los stems que el master (s)
     if (data.kick.bands.bass.onset > 0) flash();
 });
 ```
@@ -156,6 +157,7 @@ sonic.pause()     // Pausa
 sonic.seek(time)  // Salta al segundo `time`
 sonic.audibleTime // Segundo que SE ESCUCHA ahora (para letra y eventos con tiempo)
 sonic.latency     // Latencia de salida que se compensa (s)
+sonic.syncOffset  // Cuánto más tarde suenan los stems que el master (s), medido sobre el audio
 sonic.getValue(stem) // Últimos datos del stem, mismo formato que onFrame
 sonic.initDOM()   // Re-escanea el DOM
 sonic.destroy()   // Limpia todos los recursos
@@ -187,6 +189,11 @@ SonicMotion.registerEffect('my-effect', (element, value, config) => {
 ```
 
 ---
+
+## Cambios v4.3.0
+
+- **Sincronía medida sobre el audio (`syncOffset`)** — con la mezcla por stems (master en silencio como reloj), cada `<audio>` decodifica y busca su MP3 por su cuenta: un stem puede sonar 20–80 ms más tarde que el master aunque `currentTime` diga lo mismo (medido: +7 ms al arrancar, +80 ms después de un salto). Un AudioWorklet compara la envolvente del master con la suma de los stems y, cada segundo, calcula el desfase por correlación (r ≈ 0,95). `currentTime` y `audibleTime` ya lo descuentan cuando lo que suena son los stems.
+- El volumen del master se aplica con un `GainNode` (el elemento queda a volumen 1 para poder medirlo aunque esté en silencio).
 
 ## Cambios v4.2.0
 
